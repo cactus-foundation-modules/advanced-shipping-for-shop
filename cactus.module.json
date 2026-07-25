@@ -1,6 +1,6 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item service tiers for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly tier picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
@@ -64,6 +64,14 @@
       "rscComponent": "shopDeliveryEstimatePuckRscComponent",
       "rscImport": "./components/puck/ShopDeliveryEstimate.rsc",
       "layoutTypes": ["shopProductDetail", "shopProduct"]
+    },
+    {
+      "type": "ShopDeliveryCartSummary",
+      "import": "./components/puck/ShopDeliveryCartSummary",
+      "component": "shopDeliveryCartSummaryPuckComponent",
+      "rscComponent": "shopDeliveryCartSummaryPuckRscComponent",
+      "rscImport": "./components/puck/ShopDeliveryCartSummary.rsc",
+      "layoutTypes": ["shopCart"]
     }
   ],
   "cronJobs": [
