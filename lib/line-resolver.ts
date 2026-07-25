@@ -6,7 +6,7 @@
 import type { CartLineResolution } from '@/modules/shop/lib/line-meta'
 import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
-import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/working-days'
+import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
@@ -15,9 +15,10 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
-function tierOptionLabel(label: string, price: number, symbol: string): string {
-  if (price <= 0) return `${label} (included)`
-  return `${label} (+${symbol}${price.toFixed(2)})`
+function tierOptionLabel(label: string, price: number, symbol: string, byLabel: string | null): string {
+  const base = byLabel ? `${label} by ${byLabel}` : label
+  if (price <= 0) return `${base} (included)`
+  return `${base} (+${symbol}${price.toFixed(2)})`
 }
 
 export async function resolveShippingTierLineMeta(
@@ -51,18 +52,37 @@ export async function resolveShippingTierLineMeta(
   })
 
   const { currencySymbol } = await getShopConfigCached()
+  const todayStr = todayInZone(ctx.now, ctx.timezone)
   const control = {
     key: 'shippingTier',
     label: 'Delivery',
     value: chosenKey,
+    // Each option's label already carries its own promised date, so a new-enough
+    // shop drops the "Delivery:" heading and the restated confirmation line and
+    // renders the picker bare. An older shop ignores the flag and shows both.
+    optionsSelfLabelled: true,
     // priceAdjust rides along per option so a new-enough shop can move the line
     // price optimistically the instant the shopper picks a tier, before the
     // server re-validate confirms it. Older shops simply ignore the field.
-    options: delivery.tiers.map((t) => ({
-      value: t.key,
-      label: tierOptionLabel(t.label, Number(t.price), currencySymbol),
-      priceAdjust: Number(t.price) || 0,
-    })),
+    // Each option's own promised date is baked into its label ("Express
+    // Delivery by Monday (+£4.95)") so the shopper sees when every tier lands
+    // without picking it - one estimate per tier, all cheap and IO-free.
+    options: delivery.tiers.map((t) => {
+      const tEst = computeEstimate({
+        now: ctx.now,
+        timezone: ctx.timezone,
+        holidays: ctx.holidays,
+        rule: delivery.rule,
+        tier: t.modifiers,
+        stock: delivery.stock,
+      })
+      const byLabel = tEst.available && tEst.targetDate ? formatDeliveryByLabel(tEst.targetDate, todayStr) : null
+      return {
+        value: t.key,
+        label: tierOptionLabel(t.label, Number(t.price), currencySymbol, byLabel),
+        priceAdjust: Number(t.price) || 0,
+      }
+    }),
     // Shop renders a dropdown by default; the shop owner can switch the cart to a
     // radio group in Delivery settings. 'radios' is only honoured by a shop new
     // enough to read it - an older shop just shows the dropdown either way.

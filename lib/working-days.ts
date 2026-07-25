@@ -10,6 +10,8 @@ const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export function isValidDate(value: string): boolean {
   return DATE_RE.test(value)
@@ -127,6 +129,34 @@ export function formatDeliveryDate(dateStr: string): string {
   const [y, m, d] = ymd(dateStr)
   const weekday = WEEKDAY_LABELS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]
   return `${weekday} ${d} ${MONTH_LABELS[m - 1]}`
+}
+
+// "10th", "1st", "22nd" - ordinal day of month for the option-label date.
+function ordinal(n: number): string {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return `${n}th`
+  const suffix = ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+  return `${n}${suffix}`
+}
+
+// Whole calendar days from `a` to `b` (both "YYYY-MM-DD"), ignoring time of day.
+function calendarDaysBetween(a: string, b: string): number {
+  const [ay, am, ad] = ymd(a)
+  const [by, bm, bd] = ymd(b)
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000)
+}
+
+// The delivery-by phrase baked into each cart delivery option's label. Within a
+// week the weekday alone is unambiguous ("Monday"); further out it needs the
+// full date ("Monday 10th of August") so "Monday" can't be mistaken for the one
+// three weeks away. `todayStr` is today's calendar date in the shop's timezone.
+export function formatDeliveryByLabel(dateStr: string, todayStr: string): string {
+  const [y, m, d] = ymd(dateStr)
+  const weekday = WEEKDAY_FULL[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]!
+  if (calendarDaysBetween(todayStr, dateStr) > 7) {
+    return `${weekday} ${ordinal(d)} of ${MONTH_FULL[m - 1]}`
+  }
+  return weekday
 }
 
 // Compares two "YYYY-MM-DD" strings; ISO dates order correctly as plain strings.
