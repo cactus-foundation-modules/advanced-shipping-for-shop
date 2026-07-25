@@ -11,7 +11,6 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export function isValidDate(value: string): boolean {
   return DATE_RE.test(value)
@@ -147,14 +146,20 @@ function calendarDaysBetween(a: string, b: string): number {
 }
 
 // The delivery-by phrase baked into each cart delivery option's label. Within a
-// week the weekday alone is unambiguous ("Monday"); further out it needs the
-// full date ("Monday 10th of August") so "Monday" can't be mistaken for the one
-// three weeks away. `todayStr` is today's calendar date in the shop's timezone.
+// week the weekday alone is unambiguous ("Monday"). Past a week it needs the
+// day of month ("Monday 3rd") so it can't be mistaken for the one three weeks
+// away. Past four weeks a bare ordinal could itself repeat across months, so the
+// short month is added ("Monday 3rd Aug"). `todayStr` is today's calendar date
+// in the shop's timezone.
 export function formatDeliveryByLabel(dateStr: string, todayStr: string): string {
   const [y, m, d] = ymd(dateStr)
   const weekday = WEEKDAY_FULL[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]!
-  if (calendarDaysBetween(todayStr, dateStr) > 7) {
-    return `${weekday} ${ordinal(d)} of ${MONTH_FULL[m - 1]}`
+  const daysAway = calendarDaysBetween(todayStr, dateStr)
+  if (daysAway > 28) {
+    return `${weekday} ${ordinal(d)} ${MONTH_LABELS[m - 1]}`
+  }
+  if (daysAway > 7) {
+    return `${weekday} ${ordinal(d)}`
   }
   return weekday
 }
