@@ -8,7 +8,8 @@ import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
 import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { resolveProductDeliveries, findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 
@@ -24,8 +25,9 @@ export async function resolveShippingTierLineMeta(
   meta: Record<string, unknown> | undefined,
 ): Promise<CartLineResolution> {
   const ctx = await getResolveContext()
-  const deliveries = await resolveProductDeliveries([product.id], ctx)
-  const delivery = deliveries.get(product.id)
+  // Served from the request batch cache when shop prefetched the whole cart (the
+  // fast path); falls back to a single resolve otherwise.
+  const delivery = await getProductDelivery(product.id, ctx)
   // No rule, disabled, or no tiers configured -> this module has nothing to add
   // to the line. Stay out of the fold entirely.
   if (!delivery || delivery.disabled || delivery.tiers.length === 0) return NOOP
@@ -68,4 +70,14 @@ export async function resolveShippingTierLineMeta(
   const fields = [{ label: 'Delivery', value: dateLabel ? `${tierOption.label} - by ${dateLabel}` : tierOption.label }]
 
   return { valid: true, priceAdjust, persistMeta: { fields }, control }
+}
+
+// shop.cart-line-resolver-prefetch: resolve every cart product's delivery in one
+// batched pass before shop folds the lines, so resolveShippingTierLineMeta above
+// is a cache read per line instead of its own handful of queries. Called once
+// per cart validate / checkout resolve with the whole product set.
+export async function prefetchShippingTierDeliveries(products: ShpProduct[]): Promise<void> {
+  if (products.length === 0) return
+  const ctx = await getResolveContext()
+  await prefetchProductDeliveries(products.map((p) => p.id), ctx)
 }

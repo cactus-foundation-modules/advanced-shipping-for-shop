@@ -1,6 +1,6 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item service tiers for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly tier picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
@@ -45,6 +45,12 @@
       "id": "shipping-tier",
       "import": "./lib/line-resolver",
       "component": "resolveShippingTierLineMeta"
+    },
+    {
+      "point": "shop.cart-line-resolver-prefetch",
+      "id": "shipping-tier",
+      "import": "./lib/line-resolver",
+      "component": "prefetchShippingTierDeliveries"
     },
     {
       "point": "shop.product-editor-sections",
