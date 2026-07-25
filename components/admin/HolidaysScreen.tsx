@@ -57,7 +57,6 @@ export function HolidaysScreen() {
 
   return (
     <div>
-      <div className="page-header"><h1 className="page-title">Delivery holidays</h1></div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       <section style={card}>

@@ -71,7 +71,6 @@ export function SettingsScreen() {
 
   return (
     <div>
-      <div className="page-header"><h1 className="page-title">Delivery settings</h1></div>
       {error && <p style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>{error}</p>}
       {saved && !error && <p role="status" style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }}>Saved.</p>}
 

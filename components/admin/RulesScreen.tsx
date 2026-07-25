@@ -63,7 +63,6 @@ export function RulesScreen() {
 
   return (
     <div>
-      <div className="page-header"><h1 className="page-title">Delivery rules</h1></div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <p style={{ color: 'var(--color-text-muted)', margin: '0 0 1rem', fontSize: '0.875rem' }}>
         A product uses the most specific rule that matches it: range, then category, then supplier, then the default. Every date counts working days only, skipping weekends and imported bank holidays.

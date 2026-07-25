@@ -57,7 +57,6 @@ export function TiersScreen() {
 
   return (
     <div>
-      <div className="page-header"><h1 className="page-title">Service tiers</h1></div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <p style={{ color: 'var(--color-text-muted)', margin: '0 0 1rem', fontSize: '0.875rem' }}>
         Delivery-and-assembly options a shopper picks per item in the basket. Timing tweaks apply on top of whichever delivery rule matches the product; prices are set per scope below each tier.
