@@ -27,6 +27,7 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 import { listRulesCached } from '@/modules/advanced-shipping-for-shop/lib/db/rules'
 import { listTiersCached, listTierConfigCached } from '@/modules/advanced-shipping-for-shop/lib/db/tiers'
 import { getOverridesByProduct } from '@/modules/advanced-shipping-for-shop/lib/db/overrides'
+import { getVariantParents } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 
 // The per-product scope facts the resolver keys on.
@@ -187,16 +188,24 @@ export async function resolveProductDeliveries(
   const ids = [...new Set(productIds)].filter(Boolean)
   if (ids.length === 0) return result
 
+  // A cart line for a product with options holds the hidden variant CHILD
+  // product, and the child carries none of the scope facts rules key on - the
+  // range attribute, category and supplier all sit on the parent. Map children
+  // to parents up front and fetch the parents' facts alongside, so a variant
+  // line resolves exactly as its parent would.
+  const parentByChild = await getVariantParents(ids)
+  const allIds = [...new Set([...ids, ...parentByChild.values()])]
+
   const [settings, rules, tiers, tierConfig, overrides, productRows] = await Promise.all([
     getSettingsCached(),
     listRulesCached(),
     listTiersCached(),
     listTierConfigCached(),
-    getOverridesByProduct(ids),
+    getOverridesByProduct(allIds),
     prisma.$queryRaw<ProductRow[]>`
       SELECT "id", "supplier", "master_category_id", "track_inventory", "stock_count",
              "out_of_stock_behaviour", "is_pre_order", "pre_order_dispatch_date"
-      FROM "shp_products" WHERE "id" IN (${Prisma.join(ids)})
+      FROM "shp_products" WHERE "id" IN (${Prisma.join(allIds)})
     `,
   ])
 
@@ -210,7 +219,7 @@ export async function resolveProductDeliveries(
       SELECT pv."product_id", pv."value_id"
       FROM "pat_product_values" pv
       JOIN "pat_attribute_values" av ON av."id" = pv."value_id"
-      WHERE pv."product_id" IN (${Prisma.join(ids)}) AND av."attribute_id" = ${settings.rangeAttributeId}
+      WHERE pv."product_id" IN (${Prisma.join(allIds)}) AND av."attribute_id" = ${settings.rangeAttributeId}
     `
     for (const r of rangeRows) {
       const list = rangeByProduct.get(r.product_id) ?? []
@@ -230,12 +239,24 @@ export async function resolveProductDeliveries(
   )
 
   const tierByKey = new Map(tiers.map((t) => [t.id, t]))
+  const rowById = new Map(productRows.map((r) => [r.id, r]))
+  const requested = new Set(ids)
 
   for (const row of productRows) {
+    if (!requested.has(row.id)) continue // a parent fetched only for its scope facts
+    // A variant child falls back to its parent for every scope fact it lacks:
+    // range values union in (children carry none of their own today), and
+    // category/supplier fill in only when the child's own field is empty.
+    const parentId = parentByChild.get(row.id)
+    const parentRow = parentId ? rowById.get(parentId) : undefined
+    const ownRange = rangeByProduct.get(row.id) ?? []
+    const parentRange = parentRow ? rangeByProduct.get(parentRow.id) ?? [] : []
+    const ownChain = row.master_category_id ? chainByCategory.get(row.master_category_id) ?? [] : []
+    const parentChain = parentRow?.master_category_id ? chainByCategory.get(parentRow.master_category_id) ?? [] : []
     const ctxScope: ScopeCtx = {
-      rangeValueIds: rangeByProduct.get(row.id) ?? [],
-      categoryChain: row.master_category_id ? chainByCategory.get(row.master_category_id) ?? [] : [],
-      supplier: row.supplier,
+      rangeValueIds: [...new Set([...ownRange, ...parentRange])],
+      categoryChain: ownChain.length > 0 ? ownChain : parentChain,
+      supplier: row.supplier ?? parentRow?.supplier ?? null,
     }
     const stock = stockOf(row)
 
@@ -243,7 +264,9 @@ export async function resolveProductDeliveries(
     if (candidateRules.length === 0) continue // no rule -> no estimate for this product
 
     const winning = latestRule(candidateRules, stock, ctx)
-    const override = overrides.get(row.id)
+    // Per-product overrides are set on the parent in the admin (variant children
+    // never appear there), so a child without its own row inherits the parent's.
+    const override = overrides.get(row.id) ?? (parentRow ? overrides.get(parentRow.id) : undefined)
     const resolvedRule = applyOverride(ruleToResolved(winning), override)
 
     // Tier options: each tier's most-specific scope config for this product. A
