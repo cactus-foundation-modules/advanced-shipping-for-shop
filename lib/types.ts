@@ -19,11 +19,20 @@ export function isHolidayRegion(value: string): value is HolidayRegion {
   return HOLIDAY_REGIONS.some((r) => r.id === value)
 }
 
+// How the cart's per-line delivery-tier picker is shown to the shopper: a
+// compact dropdown (default) or a radio group with every tier visible at once.
+export type CartControlStyle = 'dropdown' | 'radios'
+
+export function isCartControlStyle(value: string): value is CartControlStyle {
+  return value === 'dropdown' || value === 'radios'
+}
+
 export type AshSettings = {
   rangeAttributeId: string | null
   holidayRegion: HolidayRegion
   holidaysSyncedAt: string | null
   defaultTierKey: string | null
+  cartControlStyle: CartControlStyle
 }
 
 export type DeliveryRule = {

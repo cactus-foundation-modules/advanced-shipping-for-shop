@@ -10,6 +10,7 @@ type Settings = {
   rangeAttributeId: string | null
   holidayRegion: string
   defaultTierKey: string | null
+  cartControlStyle: 'dropdown' | 'radios'
 }
 const REGIONS = [
   { id: 'england-and-wales', label: 'England and Wales' },
@@ -134,6 +135,25 @@ export function SettingsScreen() {
           </div>
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
             The tier a product page shows before the shopper changes it in the basket.
+          </p>
+        </section>
+
+        <section style={card}>
+          <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Basket delivery picker</h2>
+          <div style={rowStyle}>
+            <label htmlFor="ash-control-style">Show tiers as</label>
+            <select
+              id="ash-control-style"
+              className="form-control"
+              value={settings.cartControlStyle}
+              onChange={(e) => setSettings({ ...settings, cartControlStyle: e.target.value === 'radios' ? 'radios' : 'dropdown' })}
+            >
+              <option value="dropdown">Dropdown</option>
+              <option value="radios">Radio buttons</option>
+            </select>
+          </div>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+            How the delivery-tier picker appears on each basket line. A dropdown stays compact; radio buttons show every tier at once.
           </p>
         </section>
 

@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS "ash_settings" (
     "holiday_region" TEXT NOT NULL DEFAULT 'england-and-wales',
     "holidays_synced_at" TIMESTAMP(3),
     "default_tier_key" TEXT,
+    -- 'dropdown' | 'radios': how the cart shows the per-line tier picker.
+    "cart_control_style" TEXT NOT NULL DEFAULT 'dropdown',
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ash_settings_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "ash_settings_singleton" CHECK ("id" = 'singleton')

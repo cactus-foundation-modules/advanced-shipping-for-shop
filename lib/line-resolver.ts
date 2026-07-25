@@ -56,6 +56,10 @@ export async function resolveShippingTierLineMeta(
     label: 'Delivery',
     value: chosenKey,
     options: delivery.tiers.map((t) => ({ value: t.key, label: tierOptionLabel(t.label, Number(t.price), currencySymbol) })),
+    // Shop renders a dropdown by default; the shop owner can switch the cart to a
+    // radio group in Delivery settings. 'radios' is only honoured by a shop new
+    // enough to read it - an older shop just shows the dropdown either way.
+    renderAs: settings.cartControlStyle === 'radios' ? ('radios' as const) : ('select' as const),
   }
 
   const priceAdjust = Number(tierOption.price) || 0

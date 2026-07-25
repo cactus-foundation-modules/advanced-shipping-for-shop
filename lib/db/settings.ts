@@ -1,23 +1,26 @@
 import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
-import type { AshSettings, HolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
-import { isHolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
+import type { AshSettings, CartControlStyle, HolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { isCartControlStyle, isHolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 const FALLBACK: AshSettings = {
   rangeAttributeId: null,
   holidayRegion: 'england-and-wales',
   holidaysSyncedAt: null,
   defaultTierKey: null,
+  cartControlStyle: 'dropdown',
 }
 
 function mapRow(r: Record<string, unknown>): AshSettings {
   const region = r.holiday_region as string | null
   const synced = r.holidays_synced_at as Date | string | null
+  const style = r.cart_control_style as string | null
   return {
     rangeAttributeId: (r.range_attribute_id as string | null) ?? null,
     holidayRegion: region && isHolidayRegion(region) ? region : 'england-and-wales',
     holidaysSyncedAt: synced ? new Date(synced).toISOString() : null,
     defaultTierKey: (r.default_tier_key as string | null) ?? null,
+    cartControlStyle: style && isCartControlStyle(style) ? style : 'dropdown',
   }
 }
 
@@ -43,17 +46,20 @@ export async function updateSettings(input: {
   rangeAttributeId?: string | null
   holidayRegion?: string
   defaultTierKey?: string | null
+  cartControlStyle?: string
 }): Promise<AshSettings> {
   const current = await getSettings()
   const merged = { ...current, ...input }
   const region: HolidayRegion = isHolidayRegion(merged.holidayRegion) ? merged.holidayRegion : 'england-and-wales'
+  const style: CartControlStyle = isCartControlStyle(merged.cartControlStyle) ? merged.cartControlStyle : 'dropdown'
   await prisma.$executeRaw`
-    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "updated_at")
-    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, CURRENT_TIMESTAMP)
+    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "cart_control_style", "updated_at")
+    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, ${style}, CURRENT_TIMESTAMP)
     ON CONFLICT ("id") DO UPDATE SET
       "range_attribute_id" = ${merged.rangeAttributeId},
       "holiday_region" = ${region},
       "default_tier_key" = ${merged.defaultTierKey},
+      "cart_control_style" = ${style},
       "updated_at" = CURRENT_TIMESTAMP
   `
   return getSettings()
