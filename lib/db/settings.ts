@@ -1,7 +1,7 @@
-import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import type { AshSettings, CartControlStyle, HolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { isCartControlStyle, isHolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { ttlCached } from '@/modules/advanced-shipping-for-shop/lib/ttl-cache'
 
 const FALLBACK: AshSettings = {
   rangeAttributeId: null,
@@ -31,14 +31,16 @@ export async function getSettings(): Promise<AshSettings> {
   return rows[0] ? mapRow(rows[0]) : FALLBACK
 }
 
-// Request-scoped memo for the hot resolve path: the product page, cart and
+// Cross-request TTL memo for the hot resolve path: the product page, cart and
 // estimate API each fold many lines per request, and the settings singleton is
-// read several times per line (context, resolver, tier defaulting). React
-// cache() collapses all of those to one query per request and dedupes the
-// concurrent reads once the cart lines resolve in parallel. Kept separate from
-// getSettings so write paths (updateSettings) still read through fresh after
-// their own write within the same request.
-export const getSettingsCached = cache(getSettings)
+// read several times per line (context, resolver, tier defaulting). The TTL
+// collapses all of those - and every request within the window - to one query,
+// while admin edits still land within ten seconds (writes below also
+// invalidate, so the editing instance sees them at once). Kept separate from
+// getSettings so write paths (updateSettings) still read through fresh.
+const settingsCache = ttlCached(getSettings, 10_000)
+export const getSettingsCached = (): Promise<AshSettings> => settingsCache.get()
+export const invalidateSettingsCache = (): void => settingsCache.invalidate()
 
 // holidayRegion is accepted as a plain string (from the API's zod enum) and
 // re-validated here, so callers need not carry the HolidayRegion literal type.
@@ -62,6 +64,7 @@ export async function updateSettings(input: {
       "cart_control_style" = ${style},
       "updated_at" = CURRENT_TIMESTAMP
   `
+  settingsCache.invalidate()
   return getSettings()
 }
 
@@ -71,4 +74,5 @@ export async function markHolidaysSynced(): Promise<void> {
   await prisma.$executeRaw`
     UPDATE "ash_settings" SET "holidays_synced_at" = CURRENT_TIMESTAMP WHERE "id" = 'singleton'
   `
+  settingsCache.invalidate()
 }

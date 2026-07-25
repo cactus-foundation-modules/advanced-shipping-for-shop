@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto'
-import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { DeliveryRule, FulfilmentMode, ScopeType } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { ttlCached } from '@/modules/advanced-shipping-for-shop/lib/ttl-cache'
 
 const DEFAULT_SHIP_DAYS = [1, 2, 3, 4, 5]
 
@@ -35,10 +35,13 @@ export async function listRules(): Promise<DeliveryRule[]> {
   return rows.map(mapRow)
 }
 
-// Request-scoped memo for the resolve path: the whole rule set is scanned per
-// product, so a cart re-reads it once per request instead of once per line.
-// Admin write paths use getRule/create/update/delete, never this.
-export const listRulesCached = cache(listRules)
+// Cross-request TTL memo for the resolve path: the whole rule set is scanned
+// per product and was re-read on every validate/estimate request. Rules change
+// only in the admin, so a ten-second window is invisible to shoppers; admin
+// write paths below invalidate so their own instance re-reads at once.
+const rulesCache = ttlCached(listRules, 10_000)
+export const listRulesCached = (): Promise<DeliveryRule[]> => rulesCache.get()
+export const invalidateRulesCache = (): void => rulesCache.invalidate()
 
 export async function getRule(id: string): Promise<DeliveryRule | null> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
@@ -77,6 +80,7 @@ export async function createRule(input: RuleInput): Promise<DeliveryRule> {
   `
   const row = await getRule(id)
   if (!row) throw new Error('Failed to create delivery rule')
+  rulesCache.invalidate()
   return row
 }
 
@@ -95,8 +99,10 @@ export async function updateRule(id: string, patch: Partial<RuleInput>): Promise
   if (sets.length === 0) return
   sets.push(Prisma.sql`"updated_at" = CURRENT_TIMESTAMP`)
   await prisma.$executeRaw`UPDATE "ash_delivery_rules" SET ${Prisma.join(sets, ', ')} WHERE "id" = ${id}`
+  rulesCache.invalidate()
 }
 
 export async function deleteRule(id: string): Promise<void> {
   await prisma.$executeRaw`DELETE FROM "ash_delivery_rules" WHERE "id" = ${id}`
+  rulesCache.invalidate()
 }

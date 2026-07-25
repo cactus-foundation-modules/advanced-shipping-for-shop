@@ -11,7 +11,6 @@
 // delivery date, so the shop never over-promises.
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
-import { getCategoryAncestorPath } from '@/modules/shop/lib/db/catalogue'
 import type { ShpOutOfStockBehaviour } from '@/modules/shop/lib/types'
 import type {
   DeliveryRule,
@@ -228,15 +227,31 @@ export async function resolveProductDeliveries(
     }
   }
 
-  // Category ancestry, fetched once per distinct master category, cached self->root.
+  // Category ancestry for every distinct master category in ONE recursive CTE
+  // (this used to be one query per distinct category - a mixed cart paid a
+  // round-trip per department). depth 0 is the category itself, rising towards
+  // the root, so ordering by depth yields the self -> root chain directly. The
+  // depth cap guards against a cyclic parent link ever looping the recursion.
   const chainByCategory = new Map<string, string[]>()
   const distinctCategoryIds = [...new Set(productRows.map((r) => r.master_category_id).filter((c): c is string => !!c))]
-  await Promise.all(
-    distinctCategoryIds.map(async (catId) => {
-      const path = await getCategoryAncestorPath(catId) // root -> self
-      chainByCategory.set(catId, path.map((p) => p.id).reverse()) // self -> root
-    }),
-  )
+  if (distinctCategoryIds.length > 0) {
+    const trailRows = await prisma.$queryRaw<{ start_id: string; id: string }[]>`
+      WITH RECURSIVE trail AS (
+        SELECT "id", "parent_id", "id" AS start_id, 0 AS depth
+        FROM "shp_categories" WHERE "id" IN (${Prisma.join(distinctCategoryIds)})
+        UNION ALL
+        SELECT c."id", c."parent_id", t.start_id, t.depth + 1
+        FROM "shp_categories" c JOIN trail t ON c."id" = t."parent_id"
+        WHERE t.depth < 50
+      )
+      SELECT start_id, "id" FROM trail ORDER BY start_id, depth ASC
+    `
+    for (const row of trailRows) {
+      const chain = chainByCategory.get(row.start_id) ?? []
+      chain.push(row.id)
+      chainByCategory.set(row.start_id, chain)
+    }
+  }
 
   const tierByKey = new Map(tiers.map((t) => [t.id, t]))
   const rowById = new Map(productRows.map((r) => [r.id, r]))

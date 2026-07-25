@@ -55,7 +55,14 @@ export async function resolveShippingTierLineMeta(
     key: 'shippingTier',
     label: 'Delivery',
     value: chosenKey,
-    options: delivery.tiers.map((t) => ({ value: t.key, label: tierOptionLabel(t.label, Number(t.price), currencySymbol) })),
+    // priceAdjust rides along per option so a new-enough shop can move the line
+    // price optimistically the instant the shopper picks a tier, before the
+    // server re-validate confirms it. Older shops simply ignore the field.
+    options: delivery.tiers.map((t) => ({
+      value: t.key,
+      label: tierOptionLabel(t.label, Number(t.price), currencySymbol),
+      priceAdjust: Number(t.price) || 0,
+    })),
     // Shop renders a dropdown by default; the shop owner can switch the cart to a
     // radio group in Delivery settings. 'radios' is only honoured by a shop new
     // enough to read it - an older shop just shows the dropdown either way.

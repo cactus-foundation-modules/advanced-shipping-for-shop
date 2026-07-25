@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto'
-import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { ScopeType, ServiceTier, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { ttlCached } from '@/modules/advanced-shipping-for-shop/lib/ttl-cache'
 
 function mapTier(r: Record<string, unknown>): ServiceTier {
   return {
@@ -35,9 +35,11 @@ export async function listTiers(): Promise<ServiceTier[]> {
   return rows.map(mapTier)
 }
 
-// Request-scoped memo for the resolve path (see listRulesCached). Admin writes
-// go through getTier/create/update/delete, never this.
-export const listTiersCached = cache(listTiers)
+// Cross-request TTL memo for the resolve path (see listRulesCached). Admin
+// writes go through getTier/create/update/delete and invalidate below.
+const tiersCache = ttlCached(listTiers, 10_000)
+export const listTiersCached = (): Promise<ServiceTier[]> => tiersCache.get()
+export const invalidateTiersCache = (): void => tiersCache.invalidate()
 
 export async function getTier(id: string): Promise<ServiceTier | null> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
@@ -69,6 +71,7 @@ export async function createTier(input: TierInput): Promise<ServiceTier> {
   `
   const row = await getTier(id)
   if (!row) throw new Error('Failed to create service tier')
+  tiersCache.invalidate()
   return row
 }
 
@@ -84,11 +87,14 @@ export async function updateTier(id: string, patch: Partial<TierInput>): Promise
   if (sets.length === 0) return
   sets.push(Prisma.sql`"updated_at" = CURRENT_TIMESTAMP`)
   await prisma.$executeRaw`UPDATE "ash_service_tiers" SET ${Prisma.join(sets, ', ')} WHERE "id" = ${id}`
+  tiersCache.invalidate()
 }
 
 export async function deleteTier(id: string): Promise<void> {
   // Scope config rows cascade via the tier FK.
   await prisma.$executeRaw`DELETE FROM "ash_service_tiers" WHERE "id" = ${id}`
+  tiersCache.invalidate()
+  tierConfigCache.invalidate()
 }
 
 // ---------------------------------------------------------------------------
@@ -102,8 +108,10 @@ export async function listTierConfig(): Promise<TierScopeConfig[]> {
   return rows.map(mapConfig)
 }
 
-// Request-scoped memo for the resolve path (see listRulesCached).
-export const listTierConfigCached = cache(listTierConfig)
+// Cross-request TTL memo for the resolve path (see listRulesCached).
+const tierConfigCache = ttlCached(listTierConfig, 10_000)
+export const listTierConfigCached = (): Promise<TierScopeConfig[]> => tierConfigCache.get()
+export const invalidateTierConfigCache = (): void => tierConfigCache.invalidate()
 
 export async function listTierConfigForTier(tierId: string): Promise<TierScopeConfig[]> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
@@ -136,8 +144,10 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
       "price" = ${input.price},
       "updated_at" = CURRENT_TIMESTAMP
   `
+  tierConfigCache.invalidate()
 }
 
 export async function deleteTierConfig(id: string): Promise<void> {
   await prisma.$executeRaw`DELETE FROM "ash_tier_scope_config" WHERE "id" = ${id}`
+  tierConfigCache.invalidate()
 }
