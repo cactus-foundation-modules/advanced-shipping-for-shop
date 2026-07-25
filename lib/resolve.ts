@@ -23,9 +23,9 @@ import type {
   StockState,
   TierScopeConfig,
 } from '@/modules/advanced-shipping-for-shop/lib/types'
-import { getSettings } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
-import { listRules } from '@/modules/advanced-shipping-for-shop/lib/db/rules'
-import { listTiers, listTierConfig } from '@/modules/advanced-shipping-for-shop/lib/db/tiers'
+import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import { listRulesCached } from '@/modules/advanced-shipping-for-shop/lib/db/rules'
+import { listTiersCached, listTierConfigCached } from '@/modules/advanced-shipping-for-shop/lib/db/tiers'
 import { getOverridesByProduct } from '@/modules/advanced-shipping-for-shop/lib/db/overrides'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 
@@ -188,10 +188,10 @@ export async function resolveProductDeliveries(
   if (ids.length === 0) return result
 
   const [settings, rules, tiers, tierConfig, overrides, productRows] = await Promise.all([
-    getSettings(),
-    listRules(),
-    listTiers(),
-    listTierConfig(),
+    getSettingsCached(),
+    listRulesCached(),
+    listTiersCached(),
+    listTierConfigCached(),
     getOverridesByProduct(ids),
     prisma.$queryRaw<ProductRow[]>`
       SELECT "id", "supplier", "master_category_id", "track_inventory", "stock_count",

@@ -7,7 +7,7 @@ import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/wor
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { resolveProductDeliveries, findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
-import { getSettings } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 
 export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number }
 
@@ -61,7 +61,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   const productIds = inputs.map((i) => i.productId)
   const ctx = await getResolveContext(now)
   const [settings, deliveries] = await Promise.all([
-    getSettings(),
+    getSettingsCached(),
     resolveProductDeliveries(productIds, ctx),
   ])
 

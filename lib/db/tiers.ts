@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { ScopeType, ServiceTier, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
@@ -33,6 +34,10 @@ export async function listTiers(): Promise<ServiceTier[]> {
   `
   return rows.map(mapTier)
 }
+
+// Request-scoped memo for the resolve path (see listRulesCached). Admin writes
+// go through getTier/create/update/delete, never this.
+export const listTiersCached = cache(listTiers)
 
 export async function getTier(id: string): Promise<ServiceTier | null> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
@@ -96,6 +101,9 @@ export async function listTierConfig(): Promise<TierScopeConfig[]> {
   `
   return rows.map(mapConfig)
 }
+
+// Request-scoped memo for the resolve path (see listRulesCached).
+export const listTierConfigCached = cache(listTierConfig)
 
 export async function listTierConfigForTier(tierId: string): Promise<TierScopeConfig[]> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`

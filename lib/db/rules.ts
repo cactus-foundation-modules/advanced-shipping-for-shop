@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { DeliveryRule, FulfilmentMode, ScopeType } from '@/modules/advanced-shipping-for-shop/lib/types'
@@ -33,6 +34,11 @@ export async function listRules(): Promise<DeliveryRule[]> {
   `
   return rows.map(mapRow)
 }
+
+// Request-scoped memo for the resolve path: the whole rule set is scanned per
+// product, so a cart re-reads it once per request instead of once per line.
+// Admin write paths use getRule/create/update/delete, never this.
+export const listRulesCached = cache(listRules)
 
 export async function getRule(id: string): Promise<DeliveryRule | null> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`

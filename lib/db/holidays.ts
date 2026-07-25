@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { HolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
@@ -13,6 +14,11 @@ export async function getHolidaySet(region: HolidayRegion): Promise<Set<string>>
   `
   return new Set(rows.map((r) => r.d))
 }
+
+// Request-scoped memo keyed on region, so the storefront and cart read the
+// calendar once per request no matter how many lines resolve. Read path only -
+// the cron/import write path calls replaceHolidays, never this.
+export const getHolidaySetCached = cache(getHolidaySet)
 
 // The same rows with names, for the admin Holidays screen, soonest first.
 export async function listHolidays(region: HolidayRegion): Promise<HolidayRow[]> {

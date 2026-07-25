@@ -10,7 +10,7 @@ import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/wor
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { resolveProductDeliveries, findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
-import { getSettings } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
@@ -30,7 +30,7 @@ export async function resolveShippingTierLineMeta(
   // to the line. Stay out of the fold entirely.
   if (!delivery || delivery.disabled || delivery.tiers.length === 0) return NOOP
 
-  const settings = await getSettings()
+  const settings = await getSettingsCached()
   const requested = meta && typeof meta.shippingTier === 'string' ? meta.shippingTier : undefined
   const chosenKey =
     (requested && findTierOption(delivery, requested) && requested) ||

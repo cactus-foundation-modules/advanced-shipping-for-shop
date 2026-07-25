@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { prisma } from '@/lib/db/prisma'
 import type { AshSettings, HolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { isHolidayRegion } from '@/modules/advanced-shipping-for-shop/lib/types'
@@ -26,6 +27,15 @@ export async function getSettings(): Promise<AshSettings> {
   `
   return rows[0] ? mapRow(rows[0]) : FALLBACK
 }
+
+// Request-scoped memo for the hot resolve path: the product page, cart and
+// estimate API each fold many lines per request, and the settings singleton is
+// read several times per line (context, resolver, tier defaulting). React
+// cache() collapses all of those to one query per request and dedupes the
+// concurrent reads once the cart lines resolve in parallel. Kept separate from
+// getSettings so write paths (updateSettings) still read through fresh after
+// their own write within the same request.
+export const getSettingsCached = cache(getSettings)
 
 // holidayRegion is accepted as a plain string (from the API's zod enum) and
 // re-validated here, so callers need not carry the HolidayRegion literal type.
