@@ -1,0 +1,139 @@
+// Pure working-day date maths. No network, no database, no date-fns - native
+// Intl only, the same house style as modules/twilio/lib/business-hours.ts.
+//
+// A "calendar date" throughout is a plain "YYYY-MM-DD" string in the shop's
+// timezone. Weekday and calendar arithmetic run through Date.UTC so daylight
+// saving never shifts a date across midnight; only the two zone-aware helpers
+// (todayInZone, cutoffInstant) touch a real timezone.
+
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+export function isValidDate(value: string): boolean {
+  return DATE_RE.test(value)
+}
+
+// Splits a validated "YYYY-MM-DD" into definite numbers. Callers guard input
+// with isValidDate; a malformed string yields NaN parts, which the Date maths
+// surfaces rather than hiding.
+function ymd(dateStr: string): [number, number, number] {
+  const [y, m, d] = dateStr.split('-')
+  return [Number(y), Number(m), Number(d)]
+}
+
+export function isValidTime(value: string): boolean {
+  return TIME_RE.test(value)
+}
+
+// Today's calendar date in a timezone, as "YYYY-MM-DD". en-CA formats that way
+// directly; an unknown timezone falls back to UTC rather than throwing.
+export function todayInZone(now: Date, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(now)
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(now)
+  }
+}
+
+// The UTC offset (ms) a timezone was at on a given instant, derived by reading
+// the instant back as wall-clock parts and diffing. Positive east of UTC.
+function zoneOffsetMs(timezone: string, at: Date): number {
+  let parts: Intl.DateTimeFormatPart[]
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(at)
+  } catch {
+    return 0
+  }
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0')
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
+  return asUtc - at.getTime()
+}
+
+// The instant a wall-clock "HH:MM" on calendar date `dateStr` falls at in
+// `timezone`. Interprets the wall time as UTC, then corrects by the zone's
+// offset at that instant - accurate outside the one ambiguous hour of a DST
+// change, which no sensible dispatch cut-off sits in.
+export function cutoffInstant(dateStr: string, hhmm: string, timezone: string): Date {
+  const [y, m, d] = ymd(dateStr)
+  const [hh, mm] = hhmm.split(':')
+  const guess = Date.UTC(y, m - 1, d, Number(hh), Number(mm))
+  const offset = zoneOffsetMs(timezone, new Date(guess))
+  return new Date(guess - offset)
+}
+
+// Weekday of a calendar date, 0=Sun .. 6=Sat, read at UTC noon so no zone can
+// nudge it either side of midnight.
+export function weekdayOf(dateStr: string): number {
+  const [y, m, d] = ymd(dateStr)
+  return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()
+}
+
+// Calendar date `n` days on (n may be negative), as "YYYY-MM-DD".
+export function addCalendarDays(dateStr: string, n: number): string {
+  const [y, m, d] = ymd(dateStr)
+  const dt = new Date(Date.UTC(y, m - 1, d, 12))
+  dt.setUTCDate(dt.getUTCDate() + n)
+  return dt.toISOString().slice(0, 10)
+}
+
+// A working day is a ship day (courier collects) that is not a holiday. The
+// weekend is expressed through shipDays (default Mon-Fri), not hardcoded, so a
+// supplier that ships Mon/Wed only is modelled by its shipDays.
+export function isWorkingDay(dateStr: string, holidays: Set<string>, shipDays: number[]): boolean {
+  return shipDays.includes(weekdayOf(dateStr)) && !holidays.has(dateStr)
+}
+
+// The first working day on or after `dateStr`. Returns `dateStr` unchanged when
+// it is already a working day.
+export function nextWorkingDay(dateStr: string, holidays: Set<string>, shipDays: number[]): string {
+  let cursor = dateStr
+  // A shop that ships on no day at all would loop forever; bound the search to a
+  // little over a year and give up rather than hang.
+  for (let i = 0; i < 400; i++) {
+    if (isWorkingDay(cursor, holidays, shipDays)) return cursor
+    cursor = addCalendarDays(cursor, 1)
+  }
+  return cursor
+}
+
+// `dateStr` advanced by `n` working days. n=0 returns `dateStr` unchanged (it is
+// not rolled to a working day - callers that need that call nextWorkingDay
+// first). Each step lands on the next ship, non-holiday day.
+export function addWorkingDays(dateStr: string, n: number, holidays: Set<string>, shipDays: number[]): string {
+  if (n <= 0) return dateStr
+  let cursor = dateStr
+  let remaining = n
+  for (let i = 0; i < 400 && remaining > 0; i++) {
+    cursor = addCalendarDays(cursor, 1)
+    if (isWorkingDay(cursor, holidays, shipDays)) remaining--
+  }
+  return cursor
+}
+
+// "Tue 29 Jul" - the storefront delivery-line format. Built from the calendar
+// date's own parts (no timezone), so it reads the same wherever it renders.
+export function formatDeliveryDate(dateStr: string): string {
+  const [y, m, d] = ymd(dateStr)
+  const weekday = WEEKDAY_LABELS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]
+  return `${weekday} ${d} ${MONTH_LABELS[m - 1]}`
+}
+
+// Compares two "YYYY-MM-DD" strings; ISO dates order correctly as plain strings.
+export function isBefore(a: string, b: string): boolean {
+  return a < b
+}
+
+export function laterOf(a: string, b: string): string {
+  return a >= b ? a : b
+}

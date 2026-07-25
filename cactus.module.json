@@ -1,0 +1,85 @@
+{
+  "name": "advanced-shipping-for-shop",
+  "version": "0.1.0",
+  "tablePrefix": "ash_",
+  "description": "Advanced delivery dates and per-item service tiers for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly tier picker priced into the order.",
+  "requiresCoreVersion": "0.5.698",
+  "requiresModules": [
+    { "name": "shop", "minVersion": "0.1.104" },
+    { "name": "product-attributes-for-shop", "minVersion": "0.1.27" }
+  ],
+  "requiredEnvVars": [],
+  "permissions": [],
+  "navGroupLabel": "Delivery",
+  "navEntries": [
+    {
+      "label": "Delivery rules",
+      "path": "/m/advanced-shipping-for-shop/rules",
+      "icon": "<path d=\"M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2\"/><path d=\"M15 18H9\"/><path d=\"M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 18.52 8H14\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/>",
+      "permission": "shop.manage"
+    },
+    {
+      "label": "Service tiers",
+      "path": "/m/advanced-shipping-for-shop/tiers",
+      "icon": "<path d=\"m12 8-9.04 9.06a2.82 2.82 0 1 0 3.98 3.98L16 12\"/><circle cx=\"17\" cy=\"7\" r=\"5\"/>",
+      "permission": "shop.manage"
+    },
+    {
+      "label": "Holidays",
+      "path": "/m/advanced-shipping-for-shop/holidays",
+      "icon": "<path d=\"M8 2v4\"/><path d=\"M16 2v4\"/><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"/><path d=\"M3 10h18\"/>",
+      "permission": "shop.manage"
+    },
+    {
+      "label": "Delivery settings",
+      "path": "/m/advanced-shipping-for-shop/settings",
+      "icon": "<path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+      "permission": "shop.manage"
+    }
+  ],
+  "cookieCategories": [],
+  "settingsTabs": [],
+  "extensionPoints": [
+    {
+      "point": "shop.cart-line-resolver",
+      "id": "shipping-tier",
+      "import": "./lib/line-resolver",
+      "component": "resolveShippingTierLineMeta"
+    },
+    {
+      "point": "shop.product-editor-sections",
+      "id": "advanced-shipping-delivery",
+      "label": "Delivery",
+      "order": 60,
+      "permission": "shop.products",
+      "import": "./components/admin/ProductDeliverySection",
+      "component": "ProductDeliverySection"
+    }
+  ],
+  "puckBlocks": [
+    {
+      "type": "ShopDeliveryEstimate",
+      "import": "./components/puck/ShopDeliveryEstimate",
+      "component": "shopDeliveryEstimatePuckComponent",
+      "rscComponent": "shopDeliveryEstimatePuckRscComponent",
+      "rscImport": "./components/puck/ShopDeliveryEstimate.rsc",
+      "layoutTypes": ["shopProductDetail", "shopProduct"]
+    }
+  ],
+  "cronJobs": [
+    { "path": "/api/m/advanced-shipping-for-shop/cron/refresh-holidays", "schedule": "0 3 * * 1" }
+  ],
+  "memberExtensions": {
+    "activityTypes": [],
+    "notificationCategories": [],
+    "routeTiers": []
+  },
+  "teardown": [
+    "ash_product_overrides",
+    "ash_tier_scope_config",
+    "ash_service_tiers",
+    "ash_delivery_rules",
+    "ash_holidays",
+    "ash_settings"
+  ]
+}

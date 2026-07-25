@@ -1,0 +1,116 @@
+// Shared domain types for Advanced Shipping. Table/column names in
+// migrations/001_initial.sql are the source of truth; these describe the
+// camelCase shape the TypeScript layer sees.
+
+export type FulfilmentMode = 'STOCKED' | 'MADE_TO_ORDER'
+export type ScopeType = 'DEFAULT' | 'SUPPLIER' | 'CATEGORY' | 'RANGE'
+
+// gov.uk bank-holiday division keys - the only three the shop-wide calendar
+// offers. Mirrors modules/twilio/lib/holidays.ts (copied, not depended on).
+export type HolidayRegion = 'england-and-wales' | 'scotland' | 'northern-ireland'
+
+export const HOLIDAY_REGIONS: { id: HolidayRegion; label: string }[] = [
+  { id: 'england-and-wales', label: 'England and Wales' },
+  { id: 'scotland', label: 'Scotland' },
+  { id: 'northern-ireland', label: 'Northern Ireland' },
+]
+
+export function isHolidayRegion(value: string): value is HolidayRegion {
+  return HOLIDAY_REGIONS.some((r) => r.id === value)
+}
+
+export type AshSettings = {
+  rangeAttributeId: string | null
+  holidayRegion: HolidayRegion
+  holidaysSyncedAt: string | null
+  defaultTierKey: string | null
+}
+
+export type DeliveryRule = {
+  id: string
+  scopeType: ScopeType
+  scopeRef: string | null
+  fulfilmentMode: FulfilmentMode
+  cutoffTime: string // "HH:MM", London wall-clock
+  dispatchLeadDays: number
+  mtoLeadDays: number
+  transitDays: number
+  shipDays: number[] // weekday numbers 0=Sun .. 6=Sat
+  backorderLeadDays: number | null
+  position: number
+}
+
+export type ProductOverride = {
+  productId: string
+  fulfilmentMode: FulfilmentMode | null
+  mtoLeadDays: number | null
+  cutoffTime: string | null
+  dispatchLeadDays: number | null
+  transitDays: number | null
+  backorderLeadDays: number | null
+  disabled: boolean
+}
+
+export type ServiceTier = {
+  id: string
+  key: string
+  label: string
+  position: number
+  isNextDay: boolean
+  dispatchLeadDelta: number
+  transitDelta: number
+  minLeadDays: number | null
+}
+
+export type TierScopeConfig = {
+  id: string
+  tierId: string
+  scopeType: ScopeType
+  scopeRef: string | null
+  available: boolean
+  price: string // decimal string, "10.00"
+}
+
+// The rule after per-product override patching - what computeEstimate consumes.
+// Structurally a DeliveryRule minus the scope/id bookkeeping.
+export type ResolvedRule = {
+  fulfilmentMode: FulfilmentMode
+  cutoffTime: string
+  dispatchLeadDays: number
+  mtoLeadDays: number
+  transitDays: number
+  shipDays: number[]
+  backorderLeadDays: number | null
+}
+
+// Tier timing modifiers applied on top of a ResolvedRule. Price/availability are
+// resolved separately (they do not affect the date maths).
+export type ResolvedTier = {
+  isNextDay: boolean
+  dispatchLeadDelta: number
+  transitDelta: number
+  minLeadDays: number | null
+}
+
+// The stock facts the estimate needs, lifted straight off ShpProduct.
+export type StockState = {
+  trackInventory: boolean
+  stockCount: number | null
+  outOfStockBehaviour: 'BLOCK' | 'BACKORDER'
+  isPreOrder: boolean
+  preOrderDispatchDate: string | null // "YYYY-MM-DD"
+}
+
+export type DeliveryEstimate = {
+  available: boolean
+  reason?: string
+  // Delivered-by calendar date, "YYYY-MM-DD", or null when unavailable.
+  targetDate: string | null
+  // ISO instant of the cut-off the current estimate hangs on (STOCKED only);
+  // the storefront countdown ticks to this and re-fetches when it passes.
+  cutoffInstantISO: string | null
+  dispatchDate: string | null
+  isMadeToOrder: boolean
+  isBackorder: boolean
+  isPreOrder: boolean
+}
