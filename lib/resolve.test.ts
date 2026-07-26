@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickMostSpecific, applyOverride, latestRule, ruleToResolved } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import type { DeliveryRule, ProductOverride, ScopeType, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 function rule(scopeType: ScopeType, scopeRef: string | null, patch: Partial<DeliveryRule> = {}): DeliveryRule {
@@ -103,5 +103,24 @@ describe('latestRule', () => {
     const ctx = { now: new Date('2026-07-24T09:00:00Z'), timezone: 'Europe/London', holidays: new Set<string>() }
     expect(latestRule([quick, slow], IN_STOCK, ctx).id).toBe(slow.id)
     expect(latestRule([slow, quick], IN_STOCK, ctx).id).toBe(slow.id)
+  })
+})
+
+describe('parsePersonCount', () => {
+  it('reads the first whole number from a value label', () => {
+    expect(parsePersonCount('6 People')).toBe(6)
+    expect(parsePersonCount('2 People')).toBe(2)
+    expect(parsePersonCount('12 People')).toBe(12)
+    expect(parsePersonCount('6')).toBe(6)
+    expect(parsePersonCount('6-seat bench')).toBe(6)
+    expect(parsePersonCount('Seats: 4')).toBe(4)
+  })
+
+  it('returns null when there is no positive number to read', () => {
+    expect(parsePersonCount('Single')).toBeNull()
+    expect(parsePersonCount('')).toBeNull()
+    expect(parsePersonCount(null)).toBeNull()
+    expect(parsePersonCount(undefined)).toBeNull()
+    expect(parsePersonCount('0 People')).toBeNull()
   })
 })

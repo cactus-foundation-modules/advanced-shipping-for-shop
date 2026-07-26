@@ -109,7 +109,7 @@ function TierCard({
   send: (url: string, method: string, body?: unknown) => Promise<boolean>
 }) {
   const [draft, setDraft] = useState(tier)
-  const [priceScope, setPriceScope] = useState<{ scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true })
+  const [priceScope, setPriceScope] = useState<{ scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false })
 
   const base = `/api/m/advanced-shipping-for-shop/admin/tiers/${tier.id}`
   return (
@@ -140,7 +140,7 @@ function TierCard({
         <ul style={{ listStyle: 'none', margin: '0 0 0.5rem', padding: 0, display: 'grid', gap: '0.25rem' }}>
           {config.map((c) => (
             <li key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontSize: '0.8125rem', alignItems: 'center' }}>
-              <span>{scopeRefLabel(c.scopeType, c.scopeRef, options)} - {c.available ? `£${c.price}` : 'not available'}</span>
+              <span>{scopeRefLabel(c.scopeType, c.scopeRef, options)} - {c.available ? `£${c.price}${c.perPerson ? ' per person' : ''}` : 'not available'}</span>
               <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => send(`/api/m/advanced-shipping-for-shop/admin/tier-config/${c.id}`, 'DELETE')}>Remove</button>
             </li>
           ))}
@@ -158,6 +158,9 @@ function TierCard({
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}>
             <input type="checkbox" checked={priceScope.available} onChange={(e) => setPriceScope({ ...priceScope, available: e.target.checked })} /> Available
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
+            <input type="checkbox" checked={priceScope.perPerson} onChange={(e) => setPriceScope({ ...priceScope, perPerson: e.target.checked })} /> Per person
           </label>
           <button
             type="button"

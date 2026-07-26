@@ -11,6 +11,7 @@ const ConfigBody = z.object({
   scopeRef: z.string().min(1).nullable(),
   available: z.boolean(),
   price: z.number().min(0).max(1_000_000),
+  perPerson: z.boolean().default(false),
 })
 
 export async function GET() {

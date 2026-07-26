@@ -33,6 +33,10 @@ export type AshSettings = {
   holidaysSyncedAt: string | null
   defaultTierKey: string | null
   cartControlStyle: CartControlStyle
+  // Product attribute (pat_attributes.id) whose value carries the person count
+  // for per-person tier pricing (e.g. a "Seats" attribute reading "6 People").
+  // Null when the shop does not price anything per person.
+  perPersonAttributeId: string | null
 }
 
 export type DeliveryRule = {
@@ -78,6 +82,9 @@ export type TierScopeConfig = {
   scopeRef: string | null
   available: boolean
   price: string // decimal string, "10.00"
+  // When true this price is per person: multiplied by the person count read off
+  // the nominated count attribute, rather than charged once per line.
+  perPerson: boolean
 }
 
 // The rule after per-product override patching - what computeEstimate consumes.

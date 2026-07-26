@@ -9,6 +9,7 @@ const FALLBACK: AshSettings = {
   holidaysSyncedAt: null,
   defaultTierKey: null,
   cartControlStyle: 'dropdown',
+  perPersonAttributeId: null,
 }
 
 function mapRow(r: Record<string, unknown>): AshSettings {
@@ -21,6 +22,7 @@ function mapRow(r: Record<string, unknown>): AshSettings {
     holidaysSyncedAt: synced ? new Date(synced).toISOString() : null,
     defaultTierKey: (r.default_tier_key as string | null) ?? null,
     cartControlStyle: style && isCartControlStyle(style) ? style : 'dropdown',
+    perPersonAttributeId: (r.per_person_attribute_id as string | null) ?? null,
   }
 }
 
@@ -49,19 +51,21 @@ export async function updateSettings(input: {
   holidayRegion?: string
   defaultTierKey?: string | null
   cartControlStyle?: string
+  perPersonAttributeId?: string | null
 }): Promise<AshSettings> {
   const current = await getSettings()
   const merged = { ...current, ...input }
   const region: HolidayRegion = isHolidayRegion(merged.holidayRegion) ? merged.holidayRegion : 'england-and-wales'
   const style: CartControlStyle = isCartControlStyle(merged.cartControlStyle) ? merged.cartControlStyle : 'dropdown'
   await prisma.$executeRaw`
-    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "cart_control_style", "updated_at")
-    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, ${style}, CURRENT_TIMESTAMP)
+    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "cart_control_style", "per_person_attribute_id", "updated_at")
+    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, ${style}, ${merged.perPersonAttributeId}, CURRENT_TIMESTAMP)
     ON CONFLICT ("id") DO UPDATE SET
       "range_attribute_id" = ${merged.rangeAttributeId},
       "holiday_region" = ${region},
       "default_tier_key" = ${merged.defaultTierKey},
       "cart_control_style" = ${style},
+      "per_person_attribute_id" = ${merged.perPersonAttributeId},
       "updated_at" = CURRENT_TIMESTAMP
   `
   settingsCache.invalidate()

@@ -16,6 +16,7 @@ const PatchBody = z.object({
   holidayRegion: z.enum(HOLIDAY_REGIONS.map((r) => r.id) as [string, ...string[]]).optional(),
   defaultTierKey: z.string().nullable().optional(),
   cartControlStyle: z.enum(['dropdown', 'radios']).optional(),
+  perPersonAttributeId: z.string().nullable().optional(),
 })
 
 export async function PATCH(request: NextRequest) {

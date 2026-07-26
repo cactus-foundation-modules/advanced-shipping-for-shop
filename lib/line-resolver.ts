@@ -8,15 +8,30 @@ import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { findTierOption, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
-function tierOptionLabel(label: string, price: number, symbol: string, byLabel: string | null): string {
+// The amount a tier adds to a line: its base price, or base × person count when
+// it is priced per person. Returns null for a per-person tier on a line with no
+// readable count - it cannot be priced, so the line is blocked rather than
+// guessed. Rounded to the penny so the optimistic client figure matches this.
+export function effectiveTierPrice(t: ResolvedTierOption, count: number | null): number | null {
+  const base = Number(t.price) || 0
+  if (!t.perPerson) return base
+  if (count == null) return null
+  return Math.round(base * count * 100) / 100
+}
+
+function tierOptionLabel(label: string, price: number | null, symbol: string, byLabel: string | null): string {
   const base = byLabel ? `${label} by ${byLabel}` : label
+  // A per-person tier on a line whose count could not be read has no price to
+  // show; the shopper is told it is priced per person and the line blocks on
+  // selection until a person count is set.
+  if (price == null) return `${base} (price per person)`
   if (price <= 0) return `${base} (included)`
   return `${base} (+${symbol}${price.toFixed(2)})`
 }
@@ -77,10 +92,11 @@ export async function resolveShippingTierLineMeta(
         stock: delivery.stock,
       })
       const byLabel = tEst.available && tEst.targetDate ? formatDeliveryByLabel(tEst.targetDate, todayStr) : null
+      const eff = effectiveTierPrice(t, delivery.perPersonCount)
       return {
         value: t.key,
-        label: tierOptionLabel(t.label, Number(t.price), currencySymbol, byLabel),
-        priceAdjust: Number(t.price) || 0,
+        label: tierOptionLabel(t.label, eff, currencySymbol, byLabel),
+        priceAdjust: eff ?? 0,
       }
     }),
     // Shop renders a dropdown by default; the shop owner can switch the cart to a
@@ -89,7 +105,14 @@ export async function resolveShippingTierLineMeta(
     renderAs: settings.cartControlStyle === 'radios' ? ('radios' as const) : ('select' as const),
   }
 
-  const priceAdjust = Number(tierOption.price) || 0
+  // A per-person tier on a line whose count could not be read cannot be priced,
+  // so the line is blocked (never silently mispriced) with a plain-English
+  // reason, exactly as the shop owner chose over falling back to a flat price.
+  const chosenPrice = effectiveTierPrice(tierOption, delivery.perPersonCount)
+  if (chosenPrice == null) {
+    return { valid: false, priceAdjust: 0, persistMeta: null, reason: 'Set the number of people for this item to price its delivery', control }
+  }
+  const priceAdjust = chosenPrice
 
   // An unavailable estimate (out of stock and set to block) fails the line, like
   // any other unbuyable line, carrying the reason.
@@ -98,7 +121,11 @@ export async function resolveShippingTierLineMeta(
   }
 
   const dateLabel = est.targetDate ? formatDeliveryDate(est.targetDate) : null
-  const fields = [{ label: 'Delivery', value: dateLabel ? `${tierOption.label} - by ${dateLabel}` : tierOption.label }]
+  // On a per-person price, record the count the price was worked out from, so
+  // the order line shows why the delivery cost what it did.
+  const perPersonNote = tierOption.perPerson && delivery.perPersonCount ? ` (${delivery.perPersonCount} people)` : ''
+  const tierText = `${tierOption.label}${perPersonNote}`
+  const fields = [{ label: 'Delivery', value: dateLabel ? `${tierText} - by ${dateLabel}` : tierText }]
 
   return { valid: true, priceAdjust, persistMeta: { fields }, control }
 }

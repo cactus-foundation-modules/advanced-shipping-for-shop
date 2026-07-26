@@ -25,6 +25,7 @@ function mapConfig(r: Record<string, unknown>): TierScopeConfig {
     scopeRef: (r.scope_ref as string | null) ?? null,
     available: r.available as boolean,
     price: (r.price as { toString(): string }).toString(),
+    perPerson: (r.per_person as boolean | null) ?? false,
   }
 }
 
@@ -126,6 +127,7 @@ export type TierConfigInput = {
   scopeRef: string | null
   available: boolean
   price: number
+  perPerson: boolean
 }
 
 // Upsert on the (tier, scope) unique key so an admin editing one scope's price
@@ -135,13 +137,14 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   const scopeRef = input.scopeType === 'DEFAULT' ? null : input.scopeRef
   await prisma.$executeRaw`
     INSERT INTO "ash_tier_scope_config" (
-      "id", "tier_id", "scope_type", "scope_ref", "available", "price", "created_at", "updated_at"
+      "id", "tier_id", "scope_type", "scope_ref", "available", "price", "per_person", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, ${input.perPerson}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("tier_id", "scope_type", COALESCE("scope_ref", '')) DO UPDATE SET
       "available" = ${input.available},
       "price" = ${input.price},
+      "per_person" = ${input.perPerson},
       "updated_at" = CURRENT_TIMESTAMP
   `
   tierConfigCache.invalidate()

@@ -11,6 +11,7 @@ type Settings = {
   holidayRegion: string
   defaultTierKey: string | null
   cartControlStyle: 'dropdown' | 'radios'
+  perPersonAttributeId: string | null
 }
 const REGIONS = [
   { id: 'england-and-wales', label: 'England and Wales' },
@@ -93,6 +94,27 @@ export function SettingsScreen() {
           </div>
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
             Pick the product attribute that means &ldquo;range&rdquo;. Delivery rules can then key on its values (Hyphen, Aero, and so on).
+          </p>
+        </section>
+
+        <section style={card}>
+          <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Per-person pricing</h2>
+          <div style={rowStyle}>
+            <label htmlFor="ash-count-attr">Count attribute</label>
+            <select
+              id="ash-count-attr"
+              className="form-control"
+              value={settings.perPersonAttributeId ?? ''}
+              onChange={(e) => setSettings({ ...settings, perPersonAttributeId: e.target.value || null })}
+            >
+              <option value="">None - do not price per person</option>
+              {options.attributes.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+            Pick the attribute whose value holds a number of people (a &ldquo;Seats&rdquo; attribute reading &ldquo;2 People&rdquo;, &ldquo;6 People&rdquo;). Any tier price you tick as per-person on the Service tiers screen is then multiplied by that number. A product missing a readable number cannot be bought with a per-person tier until one is set.
           </p>
         </section>
 
