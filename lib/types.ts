@@ -90,6 +90,14 @@ export type TierScopeConfig = {
   // When true this price is per person: multiplied by the person count read off
   // the nominated count attribute, rather than charged once per line.
   perPerson: boolean
+  // Per-scope timing overrides. NULL inherits the tier's own value, so one tier
+  // can run different timings per range/category/supplier without being cloned
+  // (the cloning is how duplicate tier names crept into live data). A scope
+  // wanting NO minimum where the tier has one sets minLeadDays to 0.
+  isNextDay: boolean | null
+  dispatchLeadDelta: number | null
+  transitDelta: number | null
+  minLeadDays: number | null
 }
 
 // The rule after per-product override patching - what computeEstimate consumes.

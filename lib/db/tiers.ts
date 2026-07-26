@@ -27,6 +27,10 @@ function mapConfig(r: Record<string, unknown>): TierScopeConfig {
     available: r.available as boolean,
     price: (r.price as { toString(): string }).toString(),
     perPerson: (r.per_person as boolean | null) ?? false,
+    isNextDay: (r.is_next_day as boolean | null) ?? null,
+    dispatchLeadDelta: r.dispatch_lead_delta == null ? null : Number(r.dispatch_lead_delta),
+    transitDelta: r.transit_delta == null ? null : Number(r.transit_delta),
+    minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
   }
 }
 
@@ -147,6 +151,11 @@ export type TierConfigInput = {
   available: boolean
   price: number
   perPerson: boolean
+  // Nullable timing overrides; null inherits the tier's own timing.
+  isNextDay: boolean | null
+  dispatchLeadDelta: number | null
+  transitDelta: number | null
+  minLeadDays: number | null
 }
 
 // Upsert on the (tier, scope) unique key so an admin editing one scope's price
@@ -156,14 +165,20 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   const scopeRef = input.scopeType === 'DEFAULT' ? null : input.scopeRef
   await prisma.$executeRaw`
     INSERT INTO "ash_tier_scope_config" (
-      "id", "tier_id", "scope_type", "scope_ref", "available", "price", "per_person", "created_at", "updated_at"
+      "id", "tier_id", "scope_type", "scope_ref", "available", "price", "per_person",
+      "is_next_day", "dispatch_lead_delta", "transit_delta", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, ${input.perPerson}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, ${input.perPerson},
+      ${input.isNextDay}, ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("tier_id", "scope_type", COALESCE("scope_ref", '')) DO UPDATE SET
       "available" = ${input.available},
       "price" = ${input.price},
       "per_person" = ${input.perPerson},
+      "is_next_day" = ${input.isNextDay},
+      "dispatch_lead_delta" = ${input.dispatchLeadDelta},
+      "transit_delta" = ${input.transitDelta},
+      "min_lead_days" = ${input.minLeadDays},
       "updated_at" = CURRENT_TIMESTAMP
   `
   tierConfigCache.invalidate()

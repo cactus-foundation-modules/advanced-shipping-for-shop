@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount, tierAppliesToSupplier } from '@/modules/advanced-shipping-for-shop/lib/resolve'
-import type { DeliveryRule, ProductOverride, ScopeType, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount, tierAppliesToSupplier, tierModifiers } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import type { DeliveryRule, ProductOverride, ScopeType, ServiceTier, StockState, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 function rule(scopeType: ScopeType, scopeRef: string | null, patch: Partial<DeliveryRule> = {}): DeliveryRule {
   return {
@@ -116,6 +116,39 @@ describe('latestRule', () => {
     const ctx = { now: new Date('2026-07-24T09:00:00Z'), timezone: 'Europe/London', holidays: new Set<string>() }
     expect(latestRule([quick, slow], IN_STOCK, ctx).id).toBe(slow.id)
     expect(latestRule([slow, quick], IN_STOCK, ctx).id).toBe(slow.id)
+  })
+})
+
+describe('tierModifiers', () => {
+  const tier: ServiceTier = {
+    id: 't1', key: 'installation', label: 'Installation', supplier: null, position: 0,
+    isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5,
+  }
+  const config = (patch: Partial<TierScopeConfig>): TierScopeConfig => ({
+    id: 'c1', tierId: 't1', scopeType: 'RANGE', scopeRef: 'val-1', available: true, price: '25.95', perPerson: false,
+    isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null,
+    ...patch,
+  })
+
+  it('uses the tier timing when the scope overrides nothing', () => {
+    expect(tierModifiers(tier, config({}))).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
+  })
+
+  it('uses the tier timing when there is no scope config at all', () => {
+    expect(tierModifiers(tier)).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
+  })
+
+  it('patches only the non-null scope fields', () => {
+    expect(tierModifiers(tier, config({ transitDelta: 30 }))).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 30, minLeadDays: 5 })
+  })
+
+  it('a scope can lift the tier minimum with an explicit 0', () => {
+    expect(tierModifiers(tier, config({ minLeadDays: 0 })).minLeadDays).toBe(0)
+  })
+
+  it('a scope can force or suppress next-day explicitly', () => {
+    expect(tierModifiers(tier, config({ isNextDay: true })).isNextDay).toBe(true)
+    expect(tierModifiers({ ...tier, isNextDay: true }, config({ isNextDay: false })).isNextDay).toBe(false)
   })
 })
 

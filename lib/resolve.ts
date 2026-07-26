@@ -192,12 +192,16 @@ export function tierAppliesToSupplier(tier: Pick<ServiceTier, 'supplier'>, suppl
   return tier.supplier == null || tier.supplier === supplier
 }
 
-function tierModifiers(tier: ServiceTier): ResolvedTier {
+// The tier's own timing patched by any non-null override on the winning scope
+// config - mirrors applyOverride for rules. This is what lets ONE tier carry
+// different timings per range/category/supplier instead of being cloned per
+// timing variant (the cloning is where duplicate tier names came from).
+export function tierModifiers(tier: ServiceTier, config?: TierScopeConfig): ResolvedTier {
   return {
-    isNextDay: tier.isNextDay,
-    dispatchLeadDelta: tier.dispatchLeadDelta,
-    transitDelta: tier.transitDelta,
-    minLeadDays: tier.minLeadDays,
+    isNextDay: config?.isNextDay ?? tier.isNextDay,
+    dispatchLeadDelta: config?.dispatchLeadDelta ?? tier.dispatchLeadDelta,
+    transitDelta: config?.transitDelta ?? tier.transitDelta,
+    minLeadDays: config?.minLeadDays ?? tier.minLeadDays,
   }
 }
 
@@ -365,7 +369,7 @@ export async function resolveProductDeliveries(
         price: winningConfig ? winningConfig.price : '0.00',
         available: true,
         perPerson: winningConfig ? winningConfig.perPerson : false,
-        modifiers: tierModifiers(tierByKey.get(tier.id) ?? tier),
+        modifiers: tierModifiers(tierByKey.get(tier.id) ?? tier, winningConfig),
       })
     }
 

@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "scope_ref" TEXT,
     "available" BOOLEAN NOT NULL DEFAULT true,
     "price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    -- Nullable per-scope timing overrides (005 adds these on existing installs;
+    -- carried here too so fresh installs match). NULL inherits the tier's value.
+    "is_next_day" BOOLEAN,
+    "dispatch_lead_delta" INTEGER,
+    "transit_delta" INTEGER,
+    "min_lead_days" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ash_tier_scope_config_pkey" PRIMARY KEY ("id"),

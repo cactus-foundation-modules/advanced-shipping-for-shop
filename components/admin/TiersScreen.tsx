@@ -40,6 +40,19 @@ function timingChips(t: { isNextDay: boolean; dispatchLeadDelta: number; transit
   return chips
 }
 
+// Chips for a price row's timing overrides - only the fields it actually
+// overrides, so an all-null row shows nothing.
+function overrideChips(c: TierScopeConfig): string[] {
+  const chips: string[] = []
+  const days = (n: number) => `${Math.abs(n)} working day${Math.abs(n) === 1 ? '' : 's'}`
+  if (c.isNextDay === true) return ['Next working day here']
+  if (c.isNextDay === false) chips.push('Not next-day here')
+  if (c.dispatchLeadDelta != null) chips.push(c.dispatchLeadDelta >= 0 ? `${days(c.dispatchLeadDelta)} slower to dispatch here` : `${days(c.dispatchLeadDelta)} faster to dispatch here`)
+  if (c.transitDelta != null) chips.push(c.transitDelta >= 0 ? `${days(c.transitDelta)} longer in transit here` : `${days(c.transitDelta)} quicker in transit here`)
+  if (c.minLeadDays != null) chips.push(c.minLeadDays === 0 ? 'No minimum here' : `Never sooner than ${days(c.minLeadDays)} here`)
+  return chips
+}
+
 export function TiersScreen() {
   const [tiers, setTiers] = useState<ServiceTier[]>([])
   const [config, setConfig] = useState<TierScopeConfig[]>([])
@@ -186,7 +199,13 @@ function TierCard({
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(tier)
-  const [priceScope, setPriceScope] = useState<{ scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false })
+  const [priceScope, setPriceScope] = useState<{
+    scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean
+    isNextDay: boolean | null; dispatchLeadDelta: number | null; transitDelta: number | null; minLeadDays: number | null
+  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+  // Reveals the per-scope timing inputs; closing it clears them back to
+  // "inherit the tier's timing" so nothing is sent by accident.
+  const [customTiming, setCustomTiming] = useState(false)
 
   const base = `/api/m/advanced-shipping-for-shop/admin/tiers/${tier.id}`
   const chips = timingChips(tier)
@@ -265,7 +284,14 @@ function TierCard({
                   <tbody>
                     {config.map((c) => (
                       <tr key={c.id} style={{ borderTop: '1px solid var(--color-border)' }}>
-                        <td style={{ padding: '0.5rem 0.75rem' }}>{scopeRefLabel(c.scopeType, c.scopeRef, options)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          {scopeRefLabel(c.scopeType, c.scopeRef, options)}
+                          {overrideChips(c).length > 0 && (
+                            <span style={{ display: 'inline-flex', gap: '0.25rem', flexWrap: 'wrap', marginLeft: '0.5rem', verticalAlign: 'middle' }}>
+                              {overrideChips(c).map((chip, i) => (<span key={i} style={pillAccent}>{chip}</span>))}
+                            </span>
+                          )}
+                        </td>
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           {c.available
                             ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-muted)' }}> per person</span>}</>
@@ -301,6 +327,34 @@ function TierCard({
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
                 <input type="checkbox" checked={priceScope.perPerson} onChange={(e) => setPriceScope({ ...priceScope, perPerson: e.target.checked })} /> Per person
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this tier different timing where this price applies, instead of the tier's usual timing.">
+                <input
+                  type="checkbox"
+                  checked={customTiming}
+                  onChange={(e) => {
+                    setCustomTiming(e.target.checked)
+                    if (!e.target.checked) setPriceScope({ ...priceScope, isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+                  }}
+                /> Different timing here
+              </label>
+              {customTiming && (
+                <div style={{ flexBasis: '100%', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
+                    <input type="checkbox" checked={priceScope.isNextDay === true} onChange={(e) => setPriceScope({ ...priceScope, isNextDay: e.target.checked ? true : null })} />
+                    Next working day here
+                  </label>
+                  <label style={field}>Dispatch, +/− days
+                    <input className="form-control" style={num} type="number" placeholder="—" value={priceScope.dispatchLeadDelta ?? ''} onChange={(e) => setPriceScope({ ...priceScope, dispatchLeadDelta: e.target.value === '' ? null : Number(e.target.value) })} />
+                  </label>
+                  <label style={field}>Transit, +/− days
+                    <input className="form-control" style={num} type="number" placeholder="—" value={priceScope.transitDelta ?? ''} onChange={(e) => setPriceScope({ ...priceScope, transitDelta: e.target.value === '' ? null : Number(e.target.value) })} />
+                  </label>
+                  <label style={field}>Never sooner than
+                    <input className="form-control" style={num} type="number" min={0} placeholder="—" value={priceScope.minLeadDays ?? ''} onChange={(e) => setPriceScope({ ...priceScope, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
+                  </label>
+                  <p style={{ ...help, flexBasis: '100%', margin: 0 }}>Only fill in what should differ - anything left blank keeps the tier&rsquo;s usual timing. Set &ldquo;Never sooner than&rdquo; to 0 to lift the tier&rsquo;s minimum here.</p>
+                </div>
+              )}
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
