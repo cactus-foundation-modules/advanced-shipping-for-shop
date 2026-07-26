@@ -185,6 +185,13 @@ export function parsePersonCount(label: string | null | undefined): number | nul
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+// A tier bound to a supplier is offered only for that supplier's products; a
+// tier with no supplier is offered to every product. This is the tier-level
+// supplier gate (distinct from a scope-config's SUPPLIER scope).
+export function tierAppliesToSupplier(tier: Pick<ServiceTier, 'supplier'>, supplier: string | null): boolean {
+  return tier.supplier == null || tier.supplier === supplier
+}
+
 function tierModifiers(tier: ServiceTier): ResolvedTier {
   return {
     isNextDay: tier.isNextDay,
@@ -329,6 +336,8 @@ export async function resolveProductDeliveries(
     // tier with no matching config is not offered.
     const tierOptions: ResolvedTierOption[] = []
     for (const tier of tiers) {
+      // A supplier-bound tier is skipped for products from any other supplier.
+      if (!tierAppliesToSupplier(tier, ctxScope.supplier)) continue
       const configForTier = tierConfig.filter((c: TierScopeConfig) => c.tierId === tier.id)
       // pickMostSpecific may return several rows only for a multi-value range;
       // any of them is a valid price for that tier, so the first will do.

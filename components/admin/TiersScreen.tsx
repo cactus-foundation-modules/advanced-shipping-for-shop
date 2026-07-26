@@ -9,8 +9,8 @@ const field = { display: 'flex', flexDirection: 'column' as const, gap: '0.25rem
 const num = { width: '5.5rem' }
 const EMPTY_OPTIONS: ScopeOptions = { suppliers: [], categories: [], rangeValues: [] }
 
-type NewTier = { label: string; isNextDay: boolean; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }
-const NEW_TIER: NewTier = { label: '', isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
+type NewTier = { label: string; supplier: string | null; isNextDay: boolean; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }
+const NEW_TIER: NewTier = { label: '', supplier: null, isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
 
 export function TiersScreen() {
   const [tiers, setTiers] = useState<ServiceTier[]>([])
@@ -68,6 +68,14 @@ export function TiersScreen() {
           <label style={{ ...field, flex: '1 1 12rem' }}>Name
             <input className="form-control" value={newTier.label} placeholder="e.g. Full installation" onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} />
           </label>
+          <label style={{ ...field, flex: '1 1 10rem' }}>Supplier
+            <select className="form-control" value={newTier.supplier ?? ''} onChange={(e) => setNewTier({ ...newTier, supplier: e.target.value || null })}>
+              <option value="">Any supplier</option>
+              {options.suppliers.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
           <label style={{ ...field }}>Dispatch ±days
             <input className="form-control" style={num} type="number" value={newTier.dispatchLeadDelta} onChange={(e) => setNewTier({ ...newTier, dispatchLeadDelta: Number(e.target.value) })} />
           </label>
@@ -118,6 +126,9 @@ function TierCard({
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8125rem', flex: '1 1 12rem' }}>Name
           <input className="form-control" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
         </label>
+        <span style={{ alignSelf: 'center', fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: 999, border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+          {tier.supplier ? `Supplier: ${tier.supplier}` : 'Any supplier'}
+        </span>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8125rem' }}>Dispatch ±days
           <input className="form-control" style={{ width: '5.5rem' }} type="number" value={draft.dispatchLeadDelta} onChange={(e) => setDraft({ ...draft, dispatchLeadDelta: Number(e.target.value) })} />
         </label>
@@ -151,6 +162,7 @@ function TierCard({
             scopeRef={priceScope.scopeRef}
             options={options}
             allowRange
+            allowSupplier={false}
             onChange={(scopeType, scopeRef) => setPriceScope({ ...priceScope, scopeType, scopeRef })}
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8125rem' }}>£

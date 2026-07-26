@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 type Options = {
   attributes: { id: string; name: string }[]
-  tiers: { id: string; key: string; label: string }[]
+  tiers: { id: string; key: string; label: string; supplier?: string | null }[]
 }
 type Settings = {
   rangeAttributeId: string | null
@@ -150,7 +150,7 @@ export function SettingsScreen() {
             >
               <option value="">First offered tier</option>
               {options.tiers.map((t) => (
-                <option key={t.id} value={t.key}>{t.label}</option>
+                <option key={t.id} value={t.key}>{t.supplier ? `${t.label} (${t.supplier})` : t.label}</option>
               ))}
             </select>
           </div>

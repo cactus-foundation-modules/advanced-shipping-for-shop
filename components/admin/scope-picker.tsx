@@ -24,14 +24,19 @@ export function ScopePicker({
   options,
   onChange,
   allowRange,
+  allowSupplier = true,
 }: {
   scopeType: ScopeType
   scopeRef: string | null
   options: ScopeOptions
   onChange: (scopeType: ScopeType, scopeRef: string | null) => void
   allowRange: boolean
+  // Service-tier prices no longer scope by supplier (a tier carries its own
+  // supplier), so that screen hides the SUPPLIER option. Rules still use it.
+  allowSupplier?: boolean
 }) {
-  const types: ScopeType[] = allowRange ? ['DEFAULT', 'SUPPLIER', 'CATEGORY', 'RANGE'] : ['DEFAULT', 'SUPPLIER', 'CATEGORY']
+  const base: ScopeType[] = allowSupplier ? ['DEFAULT', 'SUPPLIER', 'CATEGORY'] : ['DEFAULT', 'CATEGORY']
+  const types: ScopeType[] = allowRange ? [...base, 'RANGE'] : base
   return (
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
       <select

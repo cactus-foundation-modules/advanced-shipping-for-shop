@@ -8,6 +8,7 @@ import { listTiers, createTier } from '@/modules/advanced-shipping-for-shop/lib/
 export const TierBody = z.object({
   key: z.string().min(1).max(60).optional(),
   label: z.string().min(1).max(80),
+  supplier: z.string().max(200).nullable().optional(),
   position: z.number().int().optional(),
   isNextDay: z.boolean(),
   dispatchLeadDelta: z.number().int().min(-365).max(365),
@@ -26,7 +27,10 @@ export async function POST(request: NextRequest) {
   if (gate.error) return gate.error
   const parsed = TierBody.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid tier' }, { status: 400 })
-  const key = parsed.data.key?.trim() || slugify(parsed.data.label)
-  const tier = await createTier({ ...parsed.data, key })
+  const supplier = parsed.data.supplier ?? null
+  // Base the key on label + supplier so two same-named tiers for different
+  // suppliers start from distinct keys; createTier guarantees final uniqueness.
+  const key = parsed.data.key?.trim() || slugify(supplier ? `${parsed.data.label}-${supplier}` : parsed.data.label)
+  const tier = await createTier({ ...parsed.data, supplier, key })
   return NextResponse.json({ tier })
 }

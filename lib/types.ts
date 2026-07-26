@@ -68,6 +68,11 @@ export type ServiceTier = {
   id: string
   key: string
   label: string
+  // Supplier name this tier is offered for, or null when it applies to every
+  // product regardless of supplier. Lets several same-named tiers coexist, one
+  // per supplier - the storefront shows each line only the tiers whose supplier
+  // matches its product.
+  supplier: string | null
   position: number
   isNextDay: boolean
   dispatchLeadDelta: number

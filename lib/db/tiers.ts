@@ -9,6 +9,7 @@ function mapTier(r: Record<string, unknown>): ServiceTier {
     id: r.id as string,
     key: r.key as string,
     label: r.label as string,
+    supplier: (r.supplier as string | null) ?? null,
     position: Number(r.position),
     isNextDay: r.is_next_day as boolean,
     dispatchLeadDelta: Number(r.dispatch_lead_delta),
@@ -52,6 +53,7 @@ export async function getTier(id: string): Promise<ServiceTier | null> {
 export type TierInput = {
   key: string
   label: string
+  supplier: string | null
   position?: number
   isNextDay: boolean
   dispatchLeadDelta: number
@@ -59,14 +61,30 @@ export type TierInput = {
   minLeadDays: number | null
 }
 
+// A key unique across all tiers. Same-named tiers (one per supplier) now
+// coexist, so the caller's desired key can already be taken; append -2, -3 …
+// until it is free rather than letting the UNIQUE index throw a 500.
+async function ensureUniqueKey(desired: string): Promise<string> {
+  const base = desired || 'tier'
+  const taken = new Set(
+    (await prisma.$queryRaw<{ key: string }[]>`SELECT "key" FROM "ash_service_tiers"`).map((r) => r.key),
+  )
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
+
 export async function createTier(input: TierInput): Promise<ServiceTier> {
   const id = randomUUID()
+  const key = await ensureUniqueKey(input.key)
   await prisma.$executeRaw`
     INSERT INTO "ash_service_tiers" (
-      "id", "key", "label", "position", "is_next_day", "dispatch_lead_delta",
+      "id", "key", "label", "supplier", "position", "is_next_day", "dispatch_lead_delta",
       "transit_delta", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${input.key}, ${input.label}, ${input.position ?? 0}, ${input.isNextDay},
+      ${id}, ${key}, ${input.label}, ${input.supplier}, ${input.position ?? 0}, ${input.isNextDay},
       ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
   `
@@ -80,6 +98,7 @@ export async function updateTier(id: string, patch: Partial<TierInput>): Promise
   const sets: Prisma.Sql[] = []
   if (patch.key !== undefined) sets.push(Prisma.sql`"key" = ${patch.key}`)
   if (patch.label !== undefined) sets.push(Prisma.sql`"label" = ${patch.label}`)
+  if (patch.supplier !== undefined) sets.push(Prisma.sql`"supplier" = ${patch.supplier}`)
   if (patch.position !== undefined) sets.push(Prisma.sql`"position" = ${patch.position}`)
   if (patch.isNextDay !== undefined) sets.push(Prisma.sql`"is_next_day" = ${patch.isNextDay}`)
   if (patch.dispatchLeadDelta !== undefined) sets.push(Prisma.sql`"dispatch_lead_delta" = ${patch.dispatchLeadDelta}`)

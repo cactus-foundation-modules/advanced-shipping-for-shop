@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount, tierAppliesToSupplier } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import type { DeliveryRule, ProductOverride, ScopeType, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 function rule(scopeType: ScopeType, scopeRef: string | null, patch: Partial<DeliveryRule> = {}): DeliveryRule {
@@ -67,6 +67,19 @@ describe('pickMostSpecific', () => {
     const rows = [rule('RANGE', 'val-1'), rule('RANGE', 'val-2')]
     const ctx = { ...CTX, rangeValueIds: ['val-1', 'val-2'] }
     expect(pickMostSpecific(rows, ctx)).toHaveLength(2)
+  })
+})
+
+describe('tierAppliesToSupplier', () => {
+  it('offers a supplier-agnostic tier to every product', () => {
+    expect(tierAppliesToSupplier({ supplier: null }, 'Acme')).toBe(true)
+    expect(tierAppliesToSupplier({ supplier: null }, null)).toBe(true)
+  })
+
+  it('offers a supplier-bound tier only to its own supplier', () => {
+    expect(tierAppliesToSupplier({ supplier: 'Acme' }, 'Acme')).toBe(true)
+    expect(tierAppliesToSupplier({ supplier: 'Acme' }, 'Other')).toBe(false)
+    expect(tierAppliesToSupplier({ supplier: 'Acme' }, null)).toBe(false)
   })
 })
 
