@@ -42,3 +42,42 @@ export async function getVariantParents(productIds: string[]): Promise<Map<strin
   for (const r of rows) result.set(r.child_product_id, r.product_id)
   return result
 }
+
+// The provider id product-attributes-for-shop registers against
+// shop-variations' `option-source` point (see that module's cactus.module.json).
+// A variation option built from an attribute records this as its
+// svr_options.source_provider, and its source_ref is the attribute id.
+const ATTRIBUTE_OPTION_PROVIDER = 'product-attributes'
+
+// child product id -> range value ids carried by the child's OWN variation
+// selection, when the range attribute has been set up as a per-variation option
+// rather than a product-level attribute. The chosen option value's source_ref is
+// the pat_attribute_value id, so it maps straight onto the same value ids the
+// product-level range read (pat_product_values) yields - the resolver can treat
+// the two identically. Empty when shop-variations is absent, no range attribute
+// is nominated, or none of the ids are variant children of a range option.
+export async function getVariantRangeValues(
+  childProductIds: string[],
+  rangeAttributeId: string,
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>()
+  if (childProductIds.length === 0 || !rangeAttributeId) return result
+  if (!(await hasVariantsTable())) return result
+  const rows = await prisma.$queryRaw<{ child_product_id: string; value_id: string }[]>`
+    SELECT v."child_product_id", ov."source_ref" AS value_id
+    FROM "svr_variants" v
+    JOIN "svr_variant_values" vv ON vv."variant_id" = v."id"
+    JOIN "svr_option_values" ov ON ov."id" = vv."option_value_id"
+    JOIN "svr_options" o ON o."id" = ov."option_id"
+    WHERE v."child_product_id" IN (${Prisma.join(childProductIds)})
+      AND o."source_provider" = ${ATTRIBUTE_OPTION_PROVIDER}
+      AND o."source_ref" = ${rangeAttributeId}
+      AND ov."source_ref" IS NOT NULL
+  `
+  for (const r of rows) {
+    const list = result.get(r.child_product_id) ?? []
+    list.push(r.value_id)
+    result.set(r.child_product_id, list)
+  }
+  return result
+}

@@ -26,7 +26,7 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 import { listRulesCached } from '@/modules/advanced-shipping-for-shop/lib/db/rules'
 import { listTiersCached, listTierConfigCached } from '@/modules/advanced-shipping-for-shop/lib/db/tiers'
 import { getOverridesByProduct } from '@/modules/advanced-shipping-for-shop/lib/db/overrides'
-import { getVariantParents } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
+import { getVariantParents, getVariantRangeValues } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 
 // The per-product scope facts the resolver keys on.
@@ -252,6 +252,15 @@ export async function resolveProductDeliveries(
     }
   }
 
+  // Per-variation range: when the range attribute has been set up as a variation
+  // option rather than a product-level attribute, each variant child carries its
+  // own range value in the shop-variations tables, not pat_product_values. Read
+  // it keyed by child id so a variant line can prefer its own range over the
+  // parent's (see the fallback below). Only the requested ids can be children.
+  const variantRangeByChild = settings.rangeAttributeId
+    ? await getVariantRangeValues(ids, settings.rangeAttributeId)
+    : new Map<string, string[]>()
+
   // Person count per product for per-person tier pricing, read the same way as
   // the range attribute (variant children carry their own value in
   // pat_product_values keyed by the child id). Only read when a count attribute
@@ -305,16 +314,20 @@ export async function resolveProductDeliveries(
   for (const row of productRows) {
     if (!requested.has(row.id)) continue // a parent fetched only for its scope facts
     // A variant child falls back to its parent for every scope fact it lacks:
-    // range values union in (children carry none of their own today), and
-    // category/supplier fill in only when the child's own field is empty.
+    // category/supplier fill in only when the child's own field is empty, and
+    // range likewise. A child's OWN range is either a product-level value on the
+    // child (rare) or, when the range attribute is a per-variation option, the
+    // value carried by its variation selection. When the child has a range of its
+    // own the parent's product-level range is NOT mixed in - the variation's
+    // range is the more specific truth and should win outright.
     const parentId = parentByChild.get(row.id)
     const parentRow = parentId ? rowById.get(parentId) : undefined
-    const ownRange = rangeByProduct.get(row.id) ?? []
+    const ownRange = [...new Set([...(rangeByProduct.get(row.id) ?? []), ...(variantRangeByChild.get(row.id) ?? [])])]
     const parentRange = parentRow ? rangeByProduct.get(parentRow.id) ?? [] : []
     const ownChain = row.master_category_id ? chainByCategory.get(row.master_category_id) ?? [] : []
     const parentChain = parentRow?.master_category_id ? chainByCategory.get(parentRow.master_category_id) ?? [] : []
     const ctxScope: ScopeCtx = {
-      rangeValueIds: [...new Set([...ownRange, ...parentRange])],
+      rangeValueIds: ownRange.length > 0 ? ownRange : parentRange,
       categoryChain: ownChain.length > 0 ? ownChain : parentChain,
       supplier: row.supplier ?? parentRow?.supplier ?? null,
     }
