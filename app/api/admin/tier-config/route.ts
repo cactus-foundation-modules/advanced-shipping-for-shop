@@ -13,7 +13,6 @@ const ConfigBody = z.object({
   price: z.number().min(0).max(1_000_000),
   perPerson: z.boolean().default(false),
   // Per-scope timing overrides; null (the default) inherits the tier's timing.
-  isNextDay: z.boolean().nullable().default(null),
   dispatchLeadDelta: z.number().int().min(-365).max(365).nullable().default(null),
   transitDelta: z.number().int().min(-365).max(365).nullable().default(null),
   minLeadDays: z.number().int().min(0).max(365).nullable().default(null),

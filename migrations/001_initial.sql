@@ -57,14 +57,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ash_delivery_rules_scope_key"
 
 -- A purchasable delivery-and-assembly service tier (e.g. standard, next-day,
 -- prebuilt-standard, full-install). Timing modifiers are applied on top of the
--- resolved rule: force next ship day, shift dispatch/transit, or floor the whole
--- estimate at a working-day minimum (e.g. full installation ~10 days).
+-- resolved rule: shift dispatch/transit, or floor the whole estimate at a
+-- working-day minimum (e.g. full installation ~10 days).
 CREATE TABLE IF NOT EXISTS "ash_service_tiers" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "label" TEXT NOT NULL,
     "position" INTEGER NOT NULL DEFAULT 0,
-    "is_next_day" BOOLEAN NOT NULL DEFAULT false,
     "dispatch_lead_delta" INTEGER NOT NULL DEFAULT 0,
     "transit_delta" INTEGER NOT NULL DEFAULT 0,
     "min_lead_days" INTEGER,
@@ -86,7 +85,6 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
     -- Nullable per-scope timing overrides (005 adds these on existing installs;
     -- carried here too so fresh installs match). NULL inherits the tier's value.
-    "is_next_day" BOOLEAN,
     "dispatch_lead_delta" INTEGER,
     "transit_delta" INTEGER,
     "min_lead_days" INTEGER,

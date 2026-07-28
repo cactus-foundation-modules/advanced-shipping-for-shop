@@ -22,7 +22,7 @@ export type ComputeEstimateInput = {
   stock: StockState
 }
 
-const NO_TIER: ResolvedTier = { isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
+const NO_TIER: ResolvedTier = { dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
 
 export function computeEstimate(input: ComputeEstimateInput): DeliveryEstimate {
   const { now, timezone, holidays, rule, stock } = input
@@ -62,8 +62,7 @@ export function computeEstimate(input: ComputeEstimateInput): DeliveryEstimate {
     dispatchDate = nextWorkingDay(laterOf(stock.preOrderDispatchDate, today), holidays, shipDays)
   } else if (rule.fulfilmentMode === 'MADE_TO_ORDER') {
     // Made to order: no cut-off. Lead time in working days from today, then
-    // transit. Tier next-day is meaningless here (nothing is in stock to rush),
-    // so only the dispatch delta and backorder lead move the dispatch day.
+    // transit. Only the dispatch delta and backorder lead move the dispatch day.
     const lead = Math.max(0, rule.mtoLeadDays + tier.dispatchLeadDelta) + backorderExtra
     dispatchDate = addWorkingDays(nextWorkingDay(today, holidays, shipDays), lead, holidays, shipDays)
   } else {
@@ -79,12 +78,7 @@ export function computeEstimate(input: ComputeEstimateInput): DeliveryEstimate {
     cutoffInstantISO = cutoffInstant(base, rule.cutoffTime, timezone).toISOString()
 
     const dispatchLead = Math.max(0, rule.dispatchLeadDays + tier.dispatchLeadDelta) + backorderExtra
-    // Next-day tier ships on the clearing day itself, ignoring the standing
-    // dispatch lead (but still honouring backorder restock, which is a real
-    // wait, not a courier speed).
-    dispatchDate = tier.isNextDay
-      ? addWorkingDays(base, backorderExtra, holidays, shipDays)
-      : addWorkingDays(base, dispatchLead, holidays, shipDays)
+    dispatchDate = addWorkingDays(base, dispatchLead, holidays, shipDays)
   }
 
   let targetDate = addWorkingDays(dispatchDate, transit, holidays, shipDays)

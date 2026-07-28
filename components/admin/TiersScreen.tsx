@@ -22,13 +22,12 @@ const pillAccent = {
   background: 'transparent',
 } as const
 
-type NewTier = { label: string; supplier: string | null; isNextDay: boolean; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }
-const NEW_TIER: NewTier = { label: '', supplier: null, isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
+type NewTier = { label: string; supplier: string | null; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }
+const NEW_TIER: NewTier = { label: '', supplier: null, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
 
 // Turn a tier's timing modifiers into plain-English chips a shop owner can read
 // at a glance, without knowing what a "±day delta" is.
-function timingChips(t: { isNextDay: boolean; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }): string[] {
-  if (t.isNextDay) return ['Next working day']
+function timingChips(t: { dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }): string[] {
   const chips: string[] = []
   const days = (n: number) => `${Math.abs(n)} working day${Math.abs(n) === 1 ? '' : 's'}`
   if (t.dispatchLeadDelta > 0) chips.push(`${days(t.dispatchLeadDelta)} slower to dispatch`)
@@ -45,8 +44,6 @@ function timingChips(t: { isNextDay: boolean; dispatchLeadDelta: number; transit
 function overrideChips(c: TierScopeConfig): string[] {
   const chips: string[] = []
   const days = (n: number) => `${Math.abs(n)} working day${Math.abs(n) === 1 ? '' : 's'}`
-  if (c.isNextDay === true) return ['Next working day here']
-  if (c.isNextDay === false) chips.push('Not next-day here')
   if (c.dispatchLeadDelta != null) chips.push(c.dispatchLeadDelta >= 0 ? `${days(c.dispatchLeadDelta)} slower to dispatch here` : `${days(c.dispatchLeadDelta)} faster to dispatch here`)
   if (c.transitDelta != null) chips.push(c.transitDelta >= 0 ? `${days(c.transitDelta)} longer in transit here` : `${days(c.transitDelta)} quicker in transit here`)
   if (c.minLeadDays != null) chips.push(c.minLeadDays === 0 ? 'No minimum here' : `Never sooner than ${days(c.minLeadDays)} here`)
@@ -143,19 +140,15 @@ export function TiersScreen() {
 
             <fieldset style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
               <legend style={legend}>How it changes the delivery estimate <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></legend>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-                <input type="checkbox" checked={newTier.isNextDay} onChange={(e) => setNewTier({ ...newTier, isNextDay: e.target.checked })} />
-                Guaranteed next working day (overrides the timings below)
-              </label>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', opacity: newTier.isNextDay ? 0.45 : 1 }}>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 <label style={field}>Dispatch, +/− days
-                  <input className="form-control" style={num} type="number" disabled={newTier.isNextDay} value={newTier.dispatchLeadDelta} onChange={(e) => setNewTier({ ...newTier, dispatchLeadDelta: Number(e.target.value) })} />
+                  <input className="form-control" style={num} type="number" value={newTier.dispatchLeadDelta} onChange={(e) => setNewTier({ ...newTier, dispatchLeadDelta: Number(e.target.value) })} />
                 </label>
                 <label style={field}>Transit, +/− days
-                  <input className="form-control" style={num} type="number" disabled={newTier.isNextDay} value={newTier.transitDelta} onChange={(e) => setNewTier({ ...newTier, transitDelta: Number(e.target.value) })} />
+                  <input className="form-control" style={num} type="number" value={newTier.transitDelta} onChange={(e) => setNewTier({ ...newTier, transitDelta: Number(e.target.value) })} />
                 </label>
                 <label style={field}>Never sooner than
-                  <input className="form-control" style={num} type="number" min={0} disabled={newTier.isNextDay} value={newTier.minLeadDays ?? ''} placeholder="—" onChange={(e) => setNewTier({ ...newTier, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
+                  <input className="form-control" style={num} type="number" min={0} value={newTier.minLeadDays ?? ''} placeholder="—" onChange={(e) => setNewTier({ ...newTier, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
                 </label>
               </div>
               <p style={help}>These adjust whatever the standard delivery rule works out. Use a plus to make the tier slower, a minus to make it faster (e.g. <strong>-1</strong> dispatch for a quicker option). &ldquo;Never sooner than&rdquo; sets a floor in working days. Leave everything at zero to match the standard rule exactly.</p>
@@ -201,8 +194,8 @@ function TierCard({
   const [draft, setDraft] = useState(tier)
   const [priceScope, setPriceScope] = useState<{
     scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean
-    isNextDay: boolean | null; dispatchLeadDelta: number | null; transitDelta: number | null; minLeadDays: number | null
-  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+    dispatchLeadDelta: number | null; transitDelta: number | null; minLeadDays: number | null
+  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
   // Reveals the per-scope timing inputs; closing it clears them back to
   // "inherit the tier's timing" so nothing is sent by accident.
   const [customTiming, setCustomTiming] = useState(false)
@@ -239,25 +232,21 @@ function TierCard({
               <label style={{ ...field, flex: '1 1 14rem' }}>Tier name
                 <input className="form-control" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', paddingBottom: '0.5rem' }}>
-                <input type="checkbox" checked={draft.isNextDay} onChange={(e) => setDraft({ ...draft, isNextDay: e.target.checked })} />
-                Guaranteed next working day
-              </label>
             </div>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem', opacity: draft.isNextDay ? 0.45 : 1 }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
               <label style={field}>Dispatch, +/− days
-                <input className="form-control" style={num} type="number" disabled={draft.isNextDay} value={draft.dispatchLeadDelta} onChange={(e) => setDraft({ ...draft, dispatchLeadDelta: Number(e.target.value) })} />
+                <input className="form-control" style={num} type="number" value={draft.dispatchLeadDelta} onChange={(e) => setDraft({ ...draft, dispatchLeadDelta: Number(e.target.value) })} />
               </label>
               <label style={field}>Transit, +/− days
-                <input className="form-control" style={num} type="number" disabled={draft.isNextDay} value={draft.transitDelta} onChange={(e) => setDraft({ ...draft, transitDelta: Number(e.target.value) })} />
+                <input className="form-control" style={num} type="number" value={draft.transitDelta} onChange={(e) => setDraft({ ...draft, transitDelta: Number(e.target.value) })} />
               </label>
               <label style={field}>Never sooner than
-                <input className="form-control" style={num} type="number" min={0} disabled={draft.isNextDay} value={draft.minLeadDays ?? ''} placeholder="—" onChange={(e) => setDraft({ ...draft, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
+                <input className="form-control" style={num} type="number" min={0} value={draft.minLeadDays ?? ''} placeholder="—" onChange={(e) => setDraft({ ...draft, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
             </div>
             <p style={help}>Plus makes this tier slower than the standard rule, minus makes it faster. Supplier can&rsquo;t be changed after a tier is created.</p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem' }}>
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, isNextDay: draft.isNextDay, dispatchLeadDelta: draft.dispatchLeadDelta, transitDelta: draft.transitDelta, minLeadDays: draft.minLeadDays })}>Save changes</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, dispatchLeadDelta: draft.dispatchLeadDelta, transitDelta: draft.transitDelta, minLeadDays: draft.minLeadDays })}>Save changes</button>
               <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Delete the "${tier.label}" tier?`)) void send(base, 'DELETE') }}>Delete tier</button>
             </div>
           </fieldset>
@@ -333,16 +322,12 @@ function TierCard({
                   checked={customTiming}
                   onChange={(e) => {
                     setCustomTiming(e.target.checked)
-                    if (!e.target.checked) setPriceScope({ ...priceScope, isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+                    if (!e.target.checked) setPriceScope({ ...priceScope, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
                   }}
                 /> Different timing here
               </label>
               {customTiming && (
                 <div style={{ flexBasis: '100%', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
-                    <input type="checkbox" checked={priceScope.isNextDay === true} onChange={(e) => setPriceScope({ ...priceScope, isNextDay: e.target.checked ? true : null })} />
-                    Next working day here
-                  </label>
                   <label style={field}>Dispatch, +/− days
                     <input className="form-control" style={num} type="number" placeholder="—" value={priceScope.dispatchLeadDelta ?? ''} onChange={(e) => setPriceScope({ ...priceScope, dispatchLeadDelta: e.target.value === '' ? null : Number(e.target.value) })} />
                   </label>

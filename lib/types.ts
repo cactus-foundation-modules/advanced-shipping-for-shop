@@ -74,7 +74,6 @@ export type ServiceTier = {
   // matches its product.
   supplier: string | null
   position: number
-  isNextDay: boolean
   dispatchLeadDelta: number
   transitDelta: number
   minLeadDays: number | null
@@ -94,7 +93,6 @@ export type TierScopeConfig = {
   // can run different timings per range/category/supplier without being cloned
   // (the cloning is how duplicate tier names crept into live data). A scope
   // wanting NO minimum where the tier has one sets minLeadDays to 0.
-  isNextDay: boolean | null
   dispatchLeadDelta: number | null
   transitDelta: number | null
   minLeadDays: number | null
@@ -115,7 +113,6 @@ export type ResolvedRule = {
 // Tier timing modifiers applied on top of a ResolvedRule. Price/availability are
 // resolved separately (they do not affect the date maths).
 export type ResolvedTier = {
-  isNextDay: boolean
   dispatchLeadDelta: number
   transitDelta: number
   minLeadDays: number | null

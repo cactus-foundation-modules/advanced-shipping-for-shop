@@ -11,7 +11,6 @@ function mapTier(r: Record<string, unknown>): ServiceTier {
     label: r.label as string,
     supplier: (r.supplier as string | null) ?? null,
     position: Number(r.position),
-    isNextDay: r.is_next_day as boolean,
     dispatchLeadDelta: Number(r.dispatch_lead_delta),
     transitDelta: Number(r.transit_delta),
     minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
@@ -27,7 +26,6 @@ function mapConfig(r: Record<string, unknown>): TierScopeConfig {
     available: r.available as boolean,
     price: (r.price as { toString(): string }).toString(),
     perPerson: (r.per_person as boolean | null) ?? false,
-    isNextDay: (r.is_next_day as boolean | null) ?? null,
     dispatchLeadDelta: r.dispatch_lead_delta == null ? null : Number(r.dispatch_lead_delta),
     transitDelta: r.transit_delta == null ? null : Number(r.transit_delta),
     minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
@@ -59,7 +57,6 @@ export type TierInput = {
   label: string
   supplier: string | null
   position?: number
-  isNextDay: boolean
   dispatchLeadDelta: number
   transitDelta: number
   minLeadDays: number | null
@@ -85,10 +82,10 @@ export async function createTier(input: TierInput): Promise<ServiceTier> {
   const key = await ensureUniqueKey(input.key)
   await prisma.$executeRaw`
     INSERT INTO "ash_service_tiers" (
-      "id", "key", "label", "supplier", "position", "is_next_day", "dispatch_lead_delta",
+      "id", "key", "label", "supplier", "position", "dispatch_lead_delta",
       "transit_delta", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${key}, ${input.label}, ${input.supplier}, ${input.position ?? 0}, ${input.isNextDay},
+      ${id}, ${key}, ${input.label}, ${input.supplier}, ${input.position ?? 0},
       ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
   `
@@ -104,7 +101,6 @@ export async function updateTier(id: string, patch: Partial<TierInput>): Promise
   if (patch.label !== undefined) sets.push(Prisma.sql`"label" = ${patch.label}`)
   if (patch.supplier !== undefined) sets.push(Prisma.sql`"supplier" = ${patch.supplier}`)
   if (patch.position !== undefined) sets.push(Prisma.sql`"position" = ${patch.position}`)
-  if (patch.isNextDay !== undefined) sets.push(Prisma.sql`"is_next_day" = ${patch.isNextDay}`)
   if (patch.dispatchLeadDelta !== undefined) sets.push(Prisma.sql`"dispatch_lead_delta" = ${patch.dispatchLeadDelta}`)
   if (patch.transitDelta !== undefined) sets.push(Prisma.sql`"transit_delta" = ${patch.transitDelta}`)
   if (patch.minLeadDays !== undefined) sets.push(Prisma.sql`"min_lead_days" = ${patch.minLeadDays}`)
@@ -152,7 +148,6 @@ export type TierConfigInput = {
   price: number
   perPerson: boolean
   // Nullable timing overrides; null inherits the tier's own timing.
-  isNextDay: boolean | null
   dispatchLeadDelta: number | null
   transitDelta: number | null
   minLeadDays: number | null
@@ -166,16 +161,15 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   await prisma.$executeRaw`
     INSERT INTO "ash_tier_scope_config" (
       "id", "tier_id", "scope_type", "scope_ref", "available", "price", "per_person",
-      "is_next_day", "dispatch_lead_delta", "transit_delta", "min_lead_days", "created_at", "updated_at"
+      "dispatch_lead_delta", "transit_delta", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
       ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, ${input.perPerson},
-      ${input.isNextDay}, ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("tier_id", "scope_type", COALESCE("scope_ref", '')) DO UPDATE SET
       "available" = ${input.available},
       "price" = ${input.price},
       "per_person" = ${input.perPerson},
-      "is_next_day" = ${input.isNextDay},
       "dispatch_lead_delta" = ${input.dispatchLeadDelta},
       "transit_delta" = ${input.transitDelta},
       "min_lead_days" = ${input.minLeadDays},

@@ -29,9 +29,10 @@ counting **working days only** - weekends and UK bank holidays are skipped.
    - **Made to order** - no cut-off; today plus the make lead, then transit.
    Backorders add a restock lead; pre-orders dispatch on the product's pre-order
    date. Every step counts working days only.
-3. **The service tier adjusts it.** A tier can force next-day dispatch, shift the
-   dispatch or transit days, or floor the whole estimate at a minimum (e.g. a
-   full installation is never sooner than ~10 working days out).
+3. **The service tier adjusts it.** A tier can shift the dispatch or transit
+   days, or floor the whole estimate at a minimum (e.g. a full installation is
+   never sooner than ~10 working days out). A tier that really does go out on
+   the clearing day sets a dispatch delta that cancels the rule's own lead.
 
 The storefront shows "Delivery by Tue 29 Jul" with a live countdown to the
 cut-off; when the cut-off passes it re-checks and the date rolls forward.

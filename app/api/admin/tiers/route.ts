@@ -10,7 +10,6 @@ export const TierBody = z.object({
   label: z.string().min(1).max(80),
   supplier: z.string().max(200).nullable().optional(),
   position: z.number().int().optional(),
-  isNextDay: z.boolean(),
   dispatchLeadDelta: z.number().int().min(-365).max(365),
   transitDelta: z.number().int().min(-365).max(365),
   minLeadDays: z.number().int().min(0).max(365).nullable(),

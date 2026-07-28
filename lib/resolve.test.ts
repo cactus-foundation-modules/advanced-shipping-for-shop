@@ -122,33 +122,32 @@ describe('latestRule', () => {
 describe('tierModifiers', () => {
   const tier: ServiceTier = {
     id: 't1', key: 'installation', label: 'Installation', supplier: null, position: 0,
-    isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5,
+    dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5,
   }
   const config = (patch: Partial<TierScopeConfig>): TierScopeConfig => ({
     id: 'c1', tierId: 't1', scopeType: 'RANGE', scopeRef: 'val-1', available: true, price: '25.95', perPerson: false,
-    isNextDay: null, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null,
+    dispatchLeadDelta: null, transitDelta: null, minLeadDays: null,
     ...patch,
   })
 
   it('uses the tier timing when the scope overrides nothing', () => {
-    expect(tierModifiers(tier, config({}))).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
+    expect(tierModifiers(tier, config({}))).toEqual({ dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
   })
 
   it('uses the tier timing when there is no scope config at all', () => {
-    expect(tierModifiers(tier)).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
+    expect(tierModifiers(tier)).toEqual({ dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
   })
 
   it('patches only the non-null scope fields', () => {
-    expect(tierModifiers(tier, config({ transitDelta: 30 }))).toEqual({ isNextDay: false, dispatchLeadDelta: 0, transitDelta: 30, minLeadDays: 5 })
+    expect(tierModifiers(tier, config({ transitDelta: 30 }))).toEqual({ dispatchLeadDelta: 0, transitDelta: 30, minLeadDays: 5 })
   })
 
   it('a scope can lift the tier minimum with an explicit 0', () => {
     expect(tierModifiers(tier, config({ minLeadDays: 0 })).minLeadDays).toBe(0)
   })
 
-  it('a scope can force or suppress next-day explicitly', () => {
-    expect(tierModifiers(tier, config({ isNextDay: true })).isNextDay).toBe(true)
-    expect(tierModifiers({ ...tier, isNextDay: true }, config({ isNextDay: false })).isNextDay).toBe(false)
+  it('a scope can override the dispatch delta with an explicit 0', () => {
+    expect(tierModifiers({ ...tier, dispatchLeadDelta: 3 }, config({ dispatchLeadDelta: 0 })).dispatchLeadDelta).toBe(0)
   })
 })
 

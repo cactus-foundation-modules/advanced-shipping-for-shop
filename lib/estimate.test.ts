@@ -26,7 +26,7 @@ const IN_STOCK: StockState = {
 const UNTRACKED: StockState = { ...IN_STOCK, trackInventory: false, stockCount: null }
 
 function tier(patch: Partial<ResolvedTier>): ResolvedTier {
-  return { isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null, ...patch }
+  return { dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null, ...patch }
 }
 
 describe('computeEstimate - stocked, cut-off', () => {
@@ -115,10 +115,10 @@ describe('computeEstimate - stock behaviour', () => {
 })
 
 describe('computeEstimate - tier modifiers', () => {
-  it('ships same day for a next-day tier', () => {
+  it('ships on the clearing day when the delta cancels the rule lead', () => {
     const rule: ResolvedRule = { ...STOCKED, dispatchLeadDays: 3 }
-    const e = computeEstimate({ now: new Date('2026-07-24T09:00:00Z'), timezone: TZ, holidays: NO_HOLIDAYS, rule, stock: IN_STOCK, tier: tier({ isNextDay: true }) })
-    expect(e.dispatchDate).toBe('2026-07-24') // clears and ships the same day, ignoring the 3-day lead
+    const e = computeEstimate({ now: new Date('2026-07-24T09:00:00Z'), timezone: TZ, holidays: NO_HOLIDAYS, rule, stock: IN_STOCK, tier: tier({ dispatchLeadDelta: -3 }) })
+    expect(e.dispatchDate).toBe('2026-07-24') // clears and ships the same day
     expect(e.targetDate).toBe('2026-07-28') // +2 transit
   })
 

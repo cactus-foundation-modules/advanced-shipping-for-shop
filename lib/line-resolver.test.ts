@@ -9,7 +9,7 @@ function opt(price: string, perPerson: boolean): ResolvedTierOption {
     price,
     available: true,
     perPerson,
-    modifiers: { isNextDay: false, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null },
+    modifiers: { dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null },
   }
 }
 

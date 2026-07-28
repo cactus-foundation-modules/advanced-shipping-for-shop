@@ -198,7 +198,6 @@ export function tierAppliesToSupplier(tier: Pick<ServiceTier, 'supplier'>, suppl
 // timing variant (the cloning is where duplicate tier names came from).
 export function tierModifiers(tier: ServiceTier, config?: TierScopeConfig): ResolvedTier {
   return {
-    isNextDay: config?.isNextDay ?? tier.isNextDay,
     dispatchLeadDelta: config?.dispatchLeadDelta ?? tier.dispatchLeadDelta,
     transitDelta: config?.transitDelta ?? tier.transitDelta,
     minLeadDays: config?.minLeadDays ?? tier.minLeadDays,

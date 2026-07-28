@@ -22,7 +22,6 @@ const Body = z.object({
   backorderLeadDays: z.number().int().min(0).max(365).nullable(),
   tier: z
     .object({
-      isNextDay: z.boolean(),
       dispatchLeadDelta: z.number().int().min(-365).max(365),
       transitDelta: z.number().int().min(-365).max(365),
       minLeadDays: z.number().int().min(0).max(365).nullable(),
