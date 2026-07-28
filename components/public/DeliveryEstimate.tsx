@@ -6,6 +6,7 @@
 // tier's date, and shows a live countdown to the dispatch cut-off. When the
 // cut-off passes it re-fetches, and the server rolls the date to the next day.
 import { useEffect, useMemo, useState } from 'react'
+import { formatCountdown } from '@/modules/advanced-shipping-for-shop/lib/countdown'
 
 type ItemEstimate = {
   hasEstimate: boolean
@@ -28,17 +29,6 @@ function slugFromLocation(): string | null {
   const idx = parts.indexOf('products')
   const slug = idx >= 0 ? parts[idx + 1] : parts[parts.length - 1]
   return slug || null
-}
-
-// "6h 12m" / "12m" / "48s" - the largest two useful units of the time left.
-function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
 }
 
 export function DeliveryEstimate({ slug: slugProp, preview }: { slug?: string; preview?: boolean }) {
