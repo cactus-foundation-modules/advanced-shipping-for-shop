@@ -1,21 +1,18 @@
-// Rule + tier resolution: given a set of product ids, work out which delivery
-// rule and which service tiers apply to each, batched so a whole cart is a
-// handful of queries rather than one per line.
+// Delivery-service resolution: given a set of product ids, work out which
+// services each is offered and at what price and timing, batched so a whole
+// cart is a handful of queries rather than one per line.
 //
-// Stacking is flat, most-specific-wins whole (no field-level inheritance): a
-// product resolves to the first scope tier it matches - range, else category
-// (nearest ancestor), else supplier, else default - and the entire winning rule
-// is used. A per-product override is the one place a winning rule is patched
-// field by field. Where several rules match at equal specificity (a product
-// carrying two range values, say) the tiebreak picks the one giving the LATEST
-// delivery date, so the shop never over-promises.
+// One most-specific-wins stack: each service resolves to the first scope its
+// config rows match - range, else category (nearest ancestor), else supplier,
+// else default - and that row decides price, per-person flag and any timing
+// override. A service with no matching row is simply not offered. Where several
+// rows match at equal specificity (a product carrying two range values, say)
+// the tiebreak picks the one giving the LATEST delivery, so the shop never
+// over-promises.
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { ShpOutOfStockBehaviour } from '@/modules/shop/lib/types'
 import type {
-  DeliveryRule,
-  ProductOverride,
-  ResolvedRule,
   ResolvedTier,
   ScopeType,
   ServiceTier,
@@ -23,11 +20,8 @@ import type {
   TierScopeConfig,
 } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
-import { listRulesCached } from '@/modules/advanced-shipping-for-shop/lib/db/rules'
 import { listTiersCached, listTierConfigCached } from '@/modules/advanced-shipping-for-shop/lib/db/tiers'
-import { getOverridesByProduct } from '@/modules/advanced-shipping-for-shop/lib/db/overrides'
 import { getVariantParents, getVariantRangeValues } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
-import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 
 // The per-product scope facts the resolver keys on.
 export type ScopeCtx = {
@@ -39,6 +33,7 @@ export type ScopeCtx = {
 export type ResolvedTierOption = {
   key: string
   label: string
+  description: string | null
   price: string // decimal string - the BASE price; per-person multiplication is
   // applied by the line resolver using the delivery's perPersonCount.
   available: boolean
@@ -48,13 +43,11 @@ export type ResolvedTierOption = {
 
 export type ProductDelivery = {
   productId: string
-  disabled: boolean
-  rule: ResolvedRule
   stock: StockState
   tiers: ResolvedTierOption[]
   // Person count read off the nominated count attribute for this line, or null
   // when no attribute is nominated or its value carries no readable number. A
-  // per-person tier on a line whose count is null is blocked, never mispriced.
+  // per-person service on a line whose count is null is blocked, never mispriced.
   perPersonCount: number | null
 }
 
@@ -91,9 +84,9 @@ function matchesScope(scopeType: ScopeType, scopeRef: string | null, ctx: ScopeC
   }
 }
 
-// Rows of the most specific tier that matches, ready for a tiebreak. For
+// Rows of the most specific scope tier that matches, ready for a tiebreak. For
 // CATEGORY the "nearest ancestor" is honoured by returning only the rows on the
-// closest category in the chain, so a rule on the product's own category beats
+// closest category in the chain, so a row on the product's own category beats
 // one on its grandparent.
 export function pickMostSpecific<T extends { scopeType: ScopeType; scopeRef: string | null }>(
   rows: T[],
@@ -115,59 +108,31 @@ export function pickMostSpecific<T extends { scopeType: ScopeType; scopeRef: str
   return []
 }
 
-export function ruleToResolved(rule: DeliveryRule): ResolvedRule {
+// The service's own timing patched by any non-null override on the winning
+// scope row. A scope wanting NO minimum where the service has one sets 0.
+export function tierModifiers(tier: ServiceTier, config?: TierScopeConfig): ResolvedTier {
   return {
-    fulfilmentMode: rule.fulfilmentMode,
-    cutoffTime: rule.cutoffTime,
-    dispatchLeadDays: rule.dispatchLeadDays,
-    mtoLeadDays: rule.mtoLeadDays,
-    transitDays: rule.transitDays,
-    shipDays: rule.shipDays,
-    backorderLeadDays: rule.backorderLeadDays,
+    transitDays: config?.transitDays ?? tier.transitDays,
+    minLeadDays: config?.minLeadDays ?? tier.minLeadDays,
   }
 }
 
-// Patches the winning rule with any non-null override field - the single place
-// field-level patching is allowed.
-export function applyOverride(rule: ResolvedRule, override: ProductOverride | undefined): ResolvedRule {
-  if (!override) return rule
-  return {
-    fulfilmentMode: override.fulfilmentMode ?? rule.fulfilmentMode,
-    cutoffTime: override.cutoffTime ?? rule.cutoffTime,
-    dispatchLeadDays: override.dispatchLeadDays ?? rule.dispatchLeadDays,
-    mtoLeadDays: override.mtoLeadDays ?? rule.mtoLeadDays,
-    transitDays: override.transitDays ?? rule.transitDays,
-    shipDays: rule.shipDays,
-    backorderLeadDays: override.backorderLeadDays ?? rule.backorderLeadDays,
-  }
-}
-
-function stockOf(row: ProductRow): StockState {
-  return {
-    trackInventory: row.track_inventory,
-    stockCount: row.stock_count,
-    outOfStockBehaviour: (row.out_of_stock_behaviour as ShpOutOfStockBehaviour) === 'BACKORDER' ? 'BACKORDER' : 'BLOCK',
-    isPreOrder: row.is_pre_order,
-    preOrderDispatchDate: row.pre_order_dispatch_date ? row.pre_order_dispatch_date.toISOString().slice(0, 10) : null,
-  }
-}
-
-// Among equal-specificity rule candidates, the one whose estimate lands latest
-// (never over-promise). Availability is ignored for the sort - an unavailable
-// candidate has no date to compare - so an available rule is preferred, and the
-// latest date wins among those.
-export function latestRule(candidates: DeliveryRule[], stock: StockState, ctx: ResolveContext): DeliveryRule {
+// Among equal-specificity config candidates, the one promising the LATEST
+// delivery (never over-promise): the largest effective transit, then the larger
+// minimum floor as the tiebreak.
+export function latestConfig(tier: ServiceTier, candidates: TierScopeConfig[]): TierScopeConfig {
   const [first, ...rest] = candidates
-  if (!first) throw new Error('latestRule requires at least one candidate')
+  if (!first) throw new Error('latestConfig requires at least one candidate')
   if (rest.length === 0) return first
   let best = first
-  let bestDate = ''
-  for (const rule of candidates) {
-    const est = computeEstimate({ now: ctx.now, timezone: ctx.timezone, holidays: ctx.holidays, rule: ruleToResolved(rule), stock })
-    const date = est.targetDate ?? ''
-    if (date > bestDate) {
-      bestDate = date
-      best = rule
+  for (const c of candidates) {
+    const cm = tierModifiers(tier, c)
+    const bm = tierModifiers(tier, best)
+    if (
+      cm.transitDays > bm.transitDays ||
+      (cm.transitDays === bm.transitDays && (cm.minLeadDays ?? 0) > (bm.minLeadDays ?? 0))
+    ) {
+      best = c
     }
   }
   return best
@@ -185,50 +150,39 @@ export function parsePersonCount(label: string | null | undefined): number | nul
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-// A tier bound to a supplier is offered only for that supplier's products; a
-// tier with no supplier is offered to every product. This is the tier-level
-// supplier gate (distinct from a scope-config's SUPPLIER scope).
-export function tierAppliesToSupplier(tier: Pick<ServiceTier, 'supplier'>, supplier: string | null): boolean {
-  return tier.supplier == null || tier.supplier === supplier
-}
-
-// The tier's own timing patched by any non-null override on the winning scope
-// config - mirrors applyOverride for rules. This is what lets ONE tier carry
-// different timings per range/category/supplier instead of being cloned per
-// timing variant (the cloning is where duplicate tier names came from).
-export function tierModifiers(tier: ServiceTier, config?: TierScopeConfig): ResolvedTier {
+function stockOf(row: ProductRow): StockState {
   return {
-    dispatchLeadDelta: config?.dispatchLeadDelta ?? tier.dispatchLeadDelta,
-    transitDelta: config?.transitDelta ?? tier.transitDelta,
-    minLeadDays: config?.minLeadDays ?? tier.minLeadDays,
+    trackInventory: row.track_inventory,
+    stockCount: row.stock_count,
+    outOfStockBehaviour: (row.out_of_stock_behaviour as ShpOutOfStockBehaviour) === 'BACKORDER' ? 'BACKORDER' : 'BLOCK',
+    isPreOrder: row.is_pre_order,
+    preOrderDispatchDate: row.pre_order_dispatch_date ? row.pre_order_dispatch_date.toISOString().slice(0, 10) : null,
   }
 }
 
-// Resolves each product id to its delivery rule (override-patched), stock state
-// and the service tiers offered to it. Products with no matching rule are simply
-// absent from the map, so the storefront shows no estimate for them.
+// Resolves each product id to its stock state and the delivery services offered
+// to it. Products offered no service at all are simply absent from the map, so
+// the storefront shows no estimate for them.
 export async function resolveProductDeliveries(
   productIds: string[],
-  ctx: ResolveContext,
+  _ctx: ResolveContext,
 ): Promise<Map<string, ProductDelivery>> {
   const result = new Map<string, ProductDelivery>()
   const ids = [...new Set(productIds)].filter(Boolean)
   if (ids.length === 0) return result
 
   // A cart line for a product with options holds the hidden variant CHILD
-  // product, and the child carries none of the scope facts rules key on - the
+  // product, and the child carries none of the scope facts services key on - the
   // range attribute, category and supplier all sit on the parent. Map children
   // to parents up front and fetch the parents' facts alongside, so a variant
   // line resolves exactly as its parent would.
   const parentByChild = await getVariantParents(ids)
   const allIds = [...new Set([...ids, ...parentByChild.values()])]
 
-  const [settings, rules, tiers, tierConfig, overrides, productRows] = await Promise.all([
+  const [settings, tiers, tierConfig, productRows] = await Promise.all([
     getSettingsCached(),
-    listRulesCached(),
     listTiersCached(),
     listTierConfigCached(),
-    getOverridesByProduct(allIds),
     prisma.$queryRaw<ProductRow[]>`
       SELECT "id", "supplier", "master_category_id", "track_inventory", "stock_count",
              "out_of_stock_behaviour", "is_pre_order", "pre_order_dispatch_date"
@@ -236,7 +190,7 @@ export async function resolveProductDeliveries(
     `,
   ])
 
-  if (rules.length === 0) return result
+  if (tiers.length === 0) return result
 
   // Range value ids per product (only when the admin has designated a range
   // attribute), joined through to the chosen attribute's values.
@@ -264,8 +218,8 @@ export async function resolveProductDeliveries(
     ? await getVariantRangeValues(ids, settings.rangeAttributeId)
     : new Map<string, string[]>()
 
-  // Person count per product for per-person tier pricing, read the same way as
-  // the range attribute (variant children carry their own value in
+  // Person count per product for per-person service pricing, read the same way
+  // as the range attribute (variant children carry their own value in
   // pat_product_values keyed by the child id). Only read when a count attribute
   // is nominated. First readable number in the value label wins.
   const countByProduct = new Map<string, number>()
@@ -310,7 +264,6 @@ export async function resolveProductDeliveries(
     }
   }
 
-  const tierByKey = new Map(tiers.map((t) => [t.id, t]))
   const rowById = new Map(productRows.map((r) => [r.id, r]))
   const requested = new Set(ids)
 
@@ -339,43 +292,31 @@ export async function resolveProductDeliveries(
     // carries its own count; a plain product carries it on itself).
     const perPersonCount = countByProduct.get(row.id) ?? (parentRow ? countByProduct.get(parentRow.id) : undefined) ?? null
 
-    const candidateRules = pickMostSpecific(rules, ctxScope)
-    if (candidateRules.length === 0) continue // no rule -> no estimate for this product
-
-    const winning = latestRule(candidateRules, stock, ctx)
-    // Per-product overrides are set on the parent in the admin (variant children
-    // never appear there), so a child without its own row inherits the parent's.
-    const override = overrides.get(row.id) ?? (parentRow ? overrides.get(parentRow.id) : undefined)
-    const resolvedRule = applyOverride(ruleToResolved(winning), override)
-
-    // Tier options: each tier's most-specific scope config for this product. A
-    // tier with no matching config is not offered.
+    // Each service's most-specific scope row for this product. A service with no
+    // matching row is not offered - unless it is the shop's designated default
+    // service, which is offered everywhere at price 0 on its own timing.
     const tierOptions: ResolvedTierOption[] = []
     for (const tier of tiers) {
-      // A supplier-bound tier is skipped for products from any other supplier.
-      if (!tierAppliesToSupplier(tier, ctxScope.supplier)) continue
       const configForTier = tierConfig.filter((c: TierScopeConfig) => c.tierId === tier.id)
-      // pickMostSpecific may return several rows only for a multi-value range;
-      // any of them is a valid price for that tier, so the first will do.
-      const winningConfig = pickMostSpecific(configForTier, ctxScope)[0]
+      const candidates = pickMostSpecific(configForTier, ctxScope)
+      const winningConfig = candidates.length > 0 ? latestConfig(tier, candidates) : undefined
       const isDefaultTier = settings.defaultTierKey != null && tier.key === settings.defaultTierKey
       if (!winningConfig && !isDefaultTier) continue
-      const available = winningConfig ? winningConfig.available : true
-      if (!available) continue
+      if (winningConfig && !winningConfig.available) continue
       tierOptions.push({
         key: tier.key,
         label: tier.label,
+        description: tier.description,
         price: winningConfig ? winningConfig.price : '0.00',
         available: true,
         perPerson: winningConfig ? winningConfig.perPerson : false,
-        modifiers: tierModifiers(tierByKey.get(tier.id) ?? tier, winningConfig),
+        modifiers: tierModifiers(tier, winningConfig),
       })
     }
+    if (tierOptions.length === 0) continue // no service -> no estimate for this product
 
     result.set(row.id, {
       productId: row.id,
-      disabled: override?.disabled ?? false,
-      rule: resolvedRule,
       stock,
       tiers: tierOptions,
       perPersonCount,
@@ -385,9 +326,9 @@ export async function resolveProductDeliveries(
   return result
 }
 
-// The tier modifiers for one product + tier key, for the cart-line resolver to
-// re-price a chosen tier server-side. Returns null when the tier is not offered
-// for that product (an invalid or stale selection).
+// The service option for one product + service key, for the cart-line resolver
+// to re-price a chosen service server-side. Returns null when the service is
+// not offered for that product (an invalid or stale selection).
 export function findTierOption(delivery: ProductDelivery, tierKey: string): ResolvedTierOption | null {
   return delivery.tiers.find((t) => t.key === tierKey) ?? null
 }

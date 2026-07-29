@@ -22,30 +22,24 @@ const pillAccent = {
   background: 'transparent',
 } as const
 
-type NewTier = { label: string; supplier: string | null; dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }
-const NEW_TIER: NewTier = { label: '', supplier: null, dispatchLeadDelta: 0, transitDelta: 0, minLeadDays: null }
+type NewTier = { label: string; description: string; transitDays: number; minLeadDays: number | null }
+const NEW_TIER: NewTier = { label: '', description: '', transitDays: 2, minLeadDays: null }
 
-// Turn a tier's timing modifiers into plain-English chips a shop owner can read
-// at a glance, without knowing what a "±day delta" is.
-function timingChips(t: { dispatchLeadDelta: number; transitDelta: number; minLeadDays: number | null }): string[] {
-  const chips: string[] = []
-  const days = (n: number) => `${Math.abs(n)} working day${Math.abs(n) === 1 ? '' : 's'}`
-  if (t.dispatchLeadDelta > 0) chips.push(`${days(t.dispatchLeadDelta)} slower to dispatch`)
-  else if (t.dispatchLeadDelta < 0) chips.push(`${days(t.dispatchLeadDelta)} faster to dispatch`)
-  if (t.transitDelta > 0) chips.push(`${days(t.transitDelta)} longer in transit`)
-  else if (t.transitDelta < 0) chips.push(`${days(t.transitDelta)} quicker in transit`)
+// Turn a service's timing into plain-English chips a shop owner can read at a
+// glance.
+function timingChips(t: { transitDays: number; minLeadDays: number | null }): string[] {
+  const days = (n: number) => `${n} working day${n === 1 ? '' : 's'}`
+  const chips: string[] = [t.transitDays === 0 ? 'Delivered on the dispatch day' : `${days(t.transitDays)} to deliver`]
   if (t.minLeadDays != null) chips.push(`Never sooner than ${days(t.minLeadDays)}`)
-  if (chips.length === 0) chips.push('Same timing as the standard rule')
   return chips
 }
 
 // Chips for a price row's timing overrides - only the fields it actually
 // overrides, so an all-null row shows nothing.
 function overrideChips(c: TierScopeConfig): string[] {
+  const days = (n: number) => `${n} working day${n === 1 ? '' : 's'}`
   const chips: string[] = []
-  const days = (n: number) => `${Math.abs(n)} working day${Math.abs(n) === 1 ? '' : 's'}`
-  if (c.dispatchLeadDelta != null) chips.push(c.dispatchLeadDelta >= 0 ? `${days(c.dispatchLeadDelta)} slower to dispatch here` : `${days(c.dispatchLeadDelta)} faster to dispatch here`)
-  if (c.transitDelta != null) chips.push(c.transitDelta >= 0 ? `${days(c.transitDelta)} longer in transit here` : `${days(c.transitDelta)} quicker in transit here`)
+  if (c.transitDays != null) chips.push(`${days(c.transitDays)} to deliver here`)
   if (c.minLeadDays != null) chips.push(c.minLeadDays === 0 ? 'No minimum here' : `Never sooner than ${days(c.minLeadDays)} here`)
   return chips
 }
@@ -73,7 +67,7 @@ export function TiersScreen() {
         setOptions({ suppliers: o.suppliers ?? [], categories: o.categories ?? [], rangeValues: o.rangeValues ?? [] })
       }
     } catch {
-      setError('Could not load service tiers.')
+      setError('Could not load delivery services.')
     }
   }, [])
 
@@ -90,8 +84,8 @@ export function TiersScreen() {
   }
 
   async function addTier() {
-    if (!newTier.label.trim()) { setError('Give the tier a name.'); return }
-    if (await send('/api/m/advanced-shipping-for-shop/admin/tiers', 'POST', newTier)) {
+    if (!newTier.label.trim()) { setError('Give the service a name.'); return }
+    if (await send('/api/m/advanced-shipping-for-shop/admin/tiers', 'POST', { ...newTier, description: newTier.description.trim() || null })) {
       setNewTier(NEW_TIER); setAdding(false)
     }
   }
@@ -101,12 +95,14 @@ export function TiersScreen() {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       <p style={{ color: 'var(--color-text-muted)', margin: '0 0 1.25rem', fontSize: '0.875rem', lineHeight: 1.5, maxWidth: '46rem' }}>
-        Service tiers are the delivery-and-assembly options a shopper picks for each item in their basket,
-        such as <em>Standard delivery</em> or <em>Full installation</em>. Each tier can nudge the delivery
-        estimate and carries its own price. Set one up below, then say what it costs.
+        Delivery services are the options a shopper picks for each item in their basket, such as
+        <em> Standard delivery</em> or <em>Full installation</em>. Each service says how many working
+        days it takes after dispatch (dispatch timing itself lives in Delivery settings) and what it
+        costs - and where a price applies is also where the service is offered at all. Set one up
+        below, then say what it costs and where.
       </p>
 
-      {/* Add a tier - tucked behind a button so the list stays the star of the show */}
+      {/* Add a service - tucked behind a button so the list stays the star of the show */}
       <section style={{ ...card, borderStyle: adding ? 'solid' : 'dashed' }}>
         {!adding ? (
           <button
@@ -114,48 +110,45 @@ export function TiersScreen() {
             onClick={() => { setError(null); setAdding(true) }}
             style={{ ...cardPad, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '0.9375rem', fontWeight: 600 }}
           >
-            + Add a service tier
+            + Add a delivery service
           </button>
         ) : (
           <div style={cardPad}>
-            <h2 style={{ fontSize: '0.9375rem', margin: '0 0 1rem' }}>New service tier</h2>
+            <h2 style={{ fontSize: '0.9375rem', margin: '0 0 1rem' }}>New delivery service</h2>
 
             <fieldset style={{ border: 'none', padding: 0, margin: '0 0 1.25rem', minInlineSize: 'auto' }}>
               <legend style={legend}>What it&rsquo;s called</legend>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <label style={{ ...field, flex: '2 1 14rem' }}>Tier name
+                <label style={{ ...field, flex: '2 1 14rem' }}>Service name
                   <input className="form-control" value={newTier.label} placeholder="e.g. Full installation" onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} />
                 </label>
-                <label style={{ ...field, flex: '1 1 12rem' }}>Offered for supplier
-                  <select className="form-control" value={newTier.supplier ?? ''} onChange={(e) => setNewTier({ ...newTier, supplier: e.target.value || null })}>
-                    <option value="">Every supplier</option>
-                    {options.suppliers.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </label>
               </div>
-              <p style={help}>Shoppers only see a tier on items whose supplier matches. Leave it on &ldquo;Every supplier&rdquo; to offer it everywhere.</p>
+              <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional, shown to shoppers)</span>
+                <textarea
+                  className="form-control"
+                  rows={2}
+                  value={newTier.description}
+                  placeholder="e.g. Delivered to the room of your choice, assembled, packaging taken away."
+                  onChange={(e) => setNewTier({ ...newTier, description: e.target.value })}
+                />
+              </label>
             </fieldset>
 
             <fieldset style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
-              <legend style={legend}>How it changes the delivery estimate <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></legend>
+              <legend style={legend}>How long it takes</legend>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <label style={field}>Dispatch, +/− days
-                  <input className="form-control" style={num} type="number" value={newTier.dispatchLeadDelta} onChange={(e) => setNewTier({ ...newTier, dispatchLeadDelta: Number(e.target.value) })} />
-                </label>
-                <label style={field}>Transit, +/− days
-                  <input className="form-control" style={num} type="number" value={newTier.transitDelta} onChange={(e) => setNewTier({ ...newTier, transitDelta: Number(e.target.value) })} />
+                <label style={field}>Working days to deliver
+                  <input className="form-control" style={num} type="number" min={0} value={newTier.transitDays} onChange={(e) => setNewTier({ ...newTier, transitDays: Number(e.target.value) })} />
                 </label>
                 <label style={field}>Never sooner than
                   <input className="form-control" style={num} type="number" min={0} value={newTier.minLeadDays ?? ''} placeholder="—" onChange={(e) => setNewTier({ ...newTier, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
                 </label>
               </div>
-              <p style={help}>These adjust whatever the standard delivery rule works out. Use a plus to make the tier slower, a minus to make it faster (e.g. <strong>-1</strong> dispatch for a quicker option). &ldquo;Never sooner than&rdquo; sets a floor in working days. Leave everything at zero to match the standard rule exactly.</p>
+              <p style={help}>Working days from dispatch to the shopper&rsquo;s door. Dispatch itself (cut-off time, days to pick and pack) is set once for the whole shop in Delivery settings. &ldquo;Never sooner than&rdquo; sets a floor in working days for services that need booking, like installation. You can give the service a different delivery time for one range or category when you add its price below.</p>
             </fieldset>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-              <button type="button" className="btn btn-primary" onClick={addTier} disabled={busy}>Add tier</button>
+              <button type="button" className="btn btn-primary" onClick={addTier} disabled={busy}>Add service</button>
               <button type="button" className="btn btn-secondary" onClick={() => { setNewTier(NEW_TIER); setAdding(false); setError(null) }} disabled={busy}>Cancel</button>
             </div>
           </div>
@@ -164,7 +157,7 @@ export function TiersScreen() {
 
       {tiers.length === 0 && (
         <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '2rem 1rem' }}>
-          No service tiers yet. Add your first one above to start offering delivery choices at checkout.
+          No delivery services yet. Add your first one above to start offering delivery choices at checkout.
         </p>
       )}
       {tiers.map((tier) => (
@@ -191,13 +184,13 @@ function TierCard({
   send: (url: string, method: string, body?: unknown) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState(tier)
+  const [draft, setDraft] = useState({ label: tier.label, description: tier.description ?? '', transitDays: tier.transitDays, minLeadDays: tier.minLeadDays })
   const [priceScope, setPriceScope] = useState<{
     scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean
-    dispatchLeadDelta: number | null; transitDelta: number | null; minLeadDays: number | null
-  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+    transitDays: number | null; minLeadDays: number | null
+  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, transitDays: null, minLeadDays: null })
   // Reveals the per-scope timing inputs; closing it clears them back to
-  // "inherit the tier's timing" so nothing is sent by accident.
+  // "inherit the service's timing" so nothing is sent by accident.
   const [customTiming, setCustomTiming] = useState(false)
 
   const base = `/api/m/advanced-shipping-for-shop/admin/tiers/${tier.id}`
@@ -206,13 +199,15 @@ function TierCard({
 
   return (
     <section style={card}>
-      {/* Header: everything a shop owner needs to recognise the tier at a glance */}
+      {/* Header: everything a shop owner needs to recognise the service at a glance */}
       <div style={{ ...cardPad, display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 16rem', minWidth: 0 }}>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.375rem' }}>
             <strong style={{ fontSize: '0.9375rem' }}>{tier.label}</strong>
-            <span style={pill}>{tier.supplier ? tier.supplier : 'Every supplier'}</span>
           </div>
+          {tier.description && (
+            <p style={{ margin: '0 0 0.375rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tier.description}</p>
+          )}
           <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
             {chips.map((c, i) => (<span key={i} style={pillAccent}>{c}</span>))}
             <span style={pill}>{priceSummary}</span>
@@ -229,37 +224,45 @@ function TierCard({
           <fieldset style={{ border: 'none', padding: 0, margin: '0 0 1.25rem', minInlineSize: 'auto' }}>
             <legend style={legend}>Name &amp; timing</legend>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <label style={{ ...field, flex: '1 1 14rem' }}>Tier name
+              <label style={{ ...field, flex: '1 1 14rem' }}>Service name
                 <input className="form-control" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
               </label>
             </div>
+            <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional, shown to shoppers)</span>
+              <textarea
+                className="form-control"
+                rows={2}
+                value={draft.description}
+                placeholder="e.g. Delivered to the room of your choice, assembled, packaging taken away."
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+            </label>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-              <label style={field}>Dispatch, +/− days
-                <input className="form-control" style={num} type="number" value={draft.dispatchLeadDelta} onChange={(e) => setDraft({ ...draft, dispatchLeadDelta: Number(e.target.value) })} />
-              </label>
-              <label style={field}>Transit, +/− days
-                <input className="form-control" style={num} type="number" value={draft.transitDelta} onChange={(e) => setDraft({ ...draft, transitDelta: Number(e.target.value) })} />
+              <label style={field}>Working days to deliver
+                <input className="form-control" style={num} type="number" min={0} value={draft.transitDays} onChange={(e) => setDraft({ ...draft, transitDays: Number(e.target.value) })} />
               </label>
               <label style={field}>Never sooner than
                 <input className="form-control" style={num} type="number" min={0} value={draft.minLeadDays ?? ''} placeholder="—" onChange={(e) => setDraft({ ...draft, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
             </div>
-            <p style={help}>Plus makes this tier slower than the standard rule, minus makes it faster. Supplier can&rsquo;t be changed after a tier is created.</p>
+            <p style={help}>Working days from dispatch to the door. A price row below can give this service a different delivery time for just that range or category.</p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem' }}>
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, dispatchLeadDelta: draft.dispatchLeadDelta, transitDelta: draft.transitDelta, minLeadDays: draft.minLeadDays })}>Save changes</button>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Delete the "${tier.label}" tier?`)) void send(base, 'DELETE') }}>Delete tier</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, description: draft.description.trim() || null, transitDays: draft.transitDays, minLeadDays: draft.minLeadDays })}>Save changes</button>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Delete the "${tier.label}" service?`)) void send(base, 'DELETE') }}>Delete service</button>
             </div>
           </fieldset>
 
           {/* Prices */}
           <fieldset style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
-            <legend style={legend}>Prices</legend>
+            <legend style={legend}>Prices &amp; where it&rsquo;s offered</legend>
             <p style={{ ...help, marginTop: 0, marginBottom: '0.75rem' }}>
-              Set a price for where this tier applies. The most specific one wins: a range price beats a category price, which beats the everywhere price.
+              A service is offered wherever it has a price row, and the most specific one wins: a range
+              price beats a category price, which beats a supplier price, which beats the everywhere
+              price. No rows anywhere means the service is never offered.
             </p>
 
             {config.length === 0 ? (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>Not offered anywhere yet - add a price below to make this tier available.</p>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>Not offered anywhere yet - add a price below to make this service available.</p>
             ) : (
               <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', marginBottom: '0.875rem' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
@@ -303,7 +306,6 @@ function TierCard({
                   scopeRef={priceScope.scopeRef}
                   options={options}
                   allowRange
-                  allowSupplier={false}
                   onChange={(scopeType, scopeRef) => setPriceScope({ ...priceScope, scopeType, scopeRef })}
                 />
               </label>
@@ -316,28 +318,25 @@ function TierCard({
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
                 <input type="checkbox" checked={priceScope.perPerson} onChange={(e) => setPriceScope({ ...priceScope, perPerson: e.target.checked })} /> Per person
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this tier different timing where this price applies, instead of the tier's usual timing.">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this service different timing where this price applies, instead of its usual timing.">
                 <input
                   type="checkbox"
                   checked={customTiming}
                   onChange={(e) => {
                     setCustomTiming(e.target.checked)
-                    if (!e.target.checked) setPriceScope({ ...priceScope, dispatchLeadDelta: null, transitDelta: null, minLeadDays: null })
+                    if (!e.target.checked) setPriceScope({ ...priceScope, transitDays: null, minLeadDays: null })
                   }}
                 /> Different timing here
               </label>
               {customTiming && (
                 <div style={{ flexBasis: '100%', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <label style={field}>Dispatch, +/− days
-                    <input className="form-control" style={num} type="number" placeholder="—" value={priceScope.dispatchLeadDelta ?? ''} onChange={(e) => setPriceScope({ ...priceScope, dispatchLeadDelta: e.target.value === '' ? null : Number(e.target.value) })} />
-                  </label>
-                  <label style={field}>Transit, +/− days
-                    <input className="form-control" style={num} type="number" placeholder="—" value={priceScope.transitDelta ?? ''} onChange={(e) => setPriceScope({ ...priceScope, transitDelta: e.target.value === '' ? null : Number(e.target.value) })} />
+                  <label style={field}>Working days to deliver
+                    <input className="form-control" style={num} type="number" min={0} placeholder="—" value={priceScope.transitDays ?? ''} onChange={(e) => setPriceScope({ ...priceScope, transitDays: e.target.value === '' ? null : Number(e.target.value) })} />
                   </label>
                   <label style={field}>Never sooner than
                     <input className="form-control" style={num} type="number" min={0} placeholder="—" value={priceScope.minLeadDays ?? ''} onChange={(e) => setPriceScope({ ...priceScope, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
                   </label>
-                  <p style={{ ...help, flexBasis: '100%', margin: 0 }}>Only fill in what should differ - anything left blank keeps the tier&rsquo;s usual timing. Set &ldquo;Never sooner than&rdquo; to 0 to lift the tier&rsquo;s minimum here.</p>
+                  <p style={{ ...help, flexBasis: '100%', margin: 0 }}>Only fill in what should differ - anything left blank keeps the service&rsquo;s usual timing. Set &ldquo;Never sooner than&rdquo; to 0 to lift the service&rsquo;s minimum here.</p>
                 </div>
               )}
               <button

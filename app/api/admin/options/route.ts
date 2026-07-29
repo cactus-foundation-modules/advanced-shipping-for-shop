@@ -31,6 +31,6 @@ export async function GET() {
     attributes: attributes.map((a) => ({ id: a.id, name: a.name })),
     rangeAttributeId: settings.rangeAttributeId,
     rangeValues: rangeAttribute ? rangeAttribute.values.map((v) => ({ id: v.id, label: v.label })) : [],
-    tiers: tiers.map((t) => ({ id: t.id, key: t.key, label: t.label, supplier: t.supplier })),
+    tiers: tiers.map((t) => ({ id: t.id, key: t.key, label: t.label })),
   })
 }

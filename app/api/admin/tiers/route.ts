@@ -8,10 +8,9 @@ import { listTiers, createTier } from '@/modules/advanced-shipping-for-shop/lib/
 export const TierBody = z.object({
   key: z.string().min(1).max(60).optional(),
   label: z.string().min(1).max(80),
-  supplier: z.string().max(200).nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
   position: z.number().int().optional(),
-  dispatchLeadDelta: z.number().int().min(-365).max(365),
-  transitDelta: z.number().int().min(-365).max(365),
+  transitDays: z.number().int().min(0).max(365),
   minLeadDays: z.number().int().min(0).max(365).nullable(),
 })
 
@@ -25,11 +24,10 @@ export async function POST(request: NextRequest) {
   const gate = await requireShopUser('shop.manage')
   if (gate.error) return gate.error
   const parsed = TierBody.safeParse(await request.json())
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid tier' }, { status: 400 })
-  const supplier = parsed.data.supplier ?? null
-  // Base the key on label + supplier so two same-named tiers for different
-  // suppliers start from distinct keys; createTier guarantees final uniqueness.
-  const key = parsed.data.key?.trim() || slugify(supplier ? `${parsed.data.label}-${supplier}` : parsed.data.label)
-  const tier = await createTier({ ...parsed.data, supplier, key })
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid service' }, { status: 400 })
+  const key = parsed.data.key?.trim() || slugify(parsed.data.label)
+  // An empty description box means "no description", never an empty string.
+  const description = parsed.data.description?.trim() || null
+  const tier = await createTier({ ...parsed.data, description, key })
   return NextResponse.json({ tier })
 }

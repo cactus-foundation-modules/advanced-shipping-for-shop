@@ -1,7 +1,7 @@
-// Turns a set of (productId, chosen tier, quantity) into per-item delivery
+// Turns a set of (productId, chosen service, quantity) into per-item delivery
 // estimates plus a grouped "arrives in N deliveries" summary. This is the one
-// place the resolver, the date engine and the shopper's tier choice meet, so the
-// product page, the cart and the estimate API all speak through it and stay
+// place the resolver, the date engine and the shopper's service choice meet, so
+// the product page, the cart and the estimate API all speak through it and stay
 // consistent.
 import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
@@ -11,19 +11,18 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 
 export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number }
 
-export type TierOption = { key: string; label: string; price: string }
+export type TierOption = { key: string; label: string; description: string | null; price: string }
 
 export type ItemEstimate = {
   productId: string
-  // A product with no matching rule, or one an override has disabled, has no
-  // estimate to show; the storefront simply renders nothing for it.
+  // A product offered no delivery service has no estimate to show; the
+  // storefront simply renders nothing for it.
   hasEstimate: boolean
   available: boolean
   reason?: string
   targetDate: string | null
   targetLabel: string | null
   cutoffInstantISO: string | null
-  isMadeToOrder: boolean
   isBackorder: boolean
   isPreOrder: boolean
   tierKey: string | null
@@ -41,16 +40,14 @@ const EMPTY_ITEM = (productId: string): ItemEstimate => ({
   targetDate: null,
   targetLabel: null,
   cutoffInstantISO: null,
-  isMadeToOrder: false,
   isBackorder: false,
   isPreOrder: false,
   tierKey: null,
   tiers: [],
 })
 
-// Which tier to price for an item: the shopper's choice if it is still offered,
-// else the shop's default tier, else the first tier offered, else none (the
-// bare rule).
+// Which service to price for an item: the shopper's choice if it is still
+// offered, else the shop's default service, else the first service offered.
 function chooseTier(delivery: ProductDelivery, requestedKey: string | undefined, defaultTierKey: string | null): string | null {
   if (requestedKey && findTierOption(delivery, requestedKey)) return requestedKey
   if (defaultTierKey && findTierOption(delivery, defaultTierKey)) return defaultTierKey
@@ -70,19 +67,19 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
 
   for (const input of inputs) {
     const delivery = deliveries.get(input.productId)
-    if (!delivery || delivery.disabled) {
+    const tierKey = delivery ? chooseTier(delivery, input.tierKey, settings.defaultTierKey) : null
+    const tierOption = delivery && tierKey ? findTierOption(delivery, tierKey) : null
+    if (!delivery || !tierOption) {
       items.push(EMPTY_ITEM(input.productId))
       continue
     }
 
-    const tierKey = chooseTier(delivery, input.tierKey, settings.defaultTierKey)
-    const tierOption = tierKey ? findTierOption(delivery, tierKey) : null
     const est = computeEstimate({
       now: ctx.now,
       timezone: ctx.timezone,
       holidays: ctx.holidays,
-      rule: delivery.rule,
-      tier: tierOption?.modifiers ?? null,
+      timing: settings,
+      tier: tierOption.modifiers,
       stock: delivery.stock,
     })
 
@@ -94,11 +91,10 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
       targetDate: est.targetDate,
       targetLabel: est.targetDate ? formatDeliveryDate(est.targetDate) : null,
       cutoffInstantISO: est.cutoffInstantISO,
-      isMadeToOrder: est.isMadeToOrder,
       isBackorder: est.isBackorder,
       isPreOrder: est.isPreOrder,
       tierKey,
-      tiers: delivery.tiers.map((t) => ({ key: t.key, label: t.label, price: t.price })),
+      tiers: delivery.tiers.map((t) => ({ key: t.key, label: t.label, description: t.description, price: t.price })),
     })
 
     if (est.available && est.targetDate) {

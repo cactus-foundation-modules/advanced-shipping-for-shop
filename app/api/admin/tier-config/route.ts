@@ -1,5 +1,5 @@
 // GET/POST /api/m/advanced-shipping-for-shop/admin/tier-config
-// Per-scope price + availability for a service tier.
+// Per-scope price + timing for a delivery service.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireShopUser } from '@/modules/shop/lib/access'
@@ -12,9 +12,9 @@ const ConfigBody = z.object({
   available: z.boolean(),
   price: z.number().min(0).max(1_000_000),
   perPerson: z.boolean().default(false),
-  // Per-scope timing overrides; null (the default) inherits the tier's timing.
-  dispatchLeadDelta: z.number().int().min(-365).max(365).nullable().default(null),
-  transitDelta: z.number().int().min(-365).max(365).nullable().default(null),
+  // Absolute per-scope timing overrides; null (the default) inherits the
+  // service's own timing.
+  transitDays: z.number().int().min(0).max(365).nullable().default(null),
   minLeadDays: z.number().int().min(0).max(365).nullable().default(null),
 })
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (parsed.data.scopeType !== 'DEFAULT' && !parsed.data.scopeRef) {
     return NextResponse.json({ error: 'Choose what this price applies to' }, { status: 400 })
   }
-  if (!(await getTier(parsed.data.tierId))) return NextResponse.json({ error: 'Tier not found' }, { status: 404 })
+  if (!(await getTier(parsed.data.tierId))) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
   await upsertTierConfig(parsed.data)
   return NextResponse.json({ ok: true })
 }

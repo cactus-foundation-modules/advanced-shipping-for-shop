@@ -9,10 +9,9 @@ function mapTier(r: Record<string, unknown>): ServiceTier {
     id: r.id as string,
     key: r.key as string,
     label: r.label as string,
-    supplier: (r.supplier as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
     position: Number(r.position),
-    dispatchLeadDelta: Number(r.dispatch_lead_delta),
-    transitDelta: Number(r.transit_delta),
+    transitDays: Number(r.transit_days),
     minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
   }
 }
@@ -26,8 +25,7 @@ function mapConfig(r: Record<string, unknown>): TierScopeConfig {
     available: r.available as boolean,
     price: (r.price as { toString(): string }).toString(),
     perPerson: (r.per_person as boolean | null) ?? false,
-    dispatchLeadDelta: r.dispatch_lead_delta == null ? null : Number(r.dispatch_lead_delta),
-    transitDelta: r.transit_delta == null ? null : Number(r.transit_delta),
+    transitDays: r.transit_days == null ? null : Number(r.transit_days),
     minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
   }
 }
@@ -39,7 +37,7 @@ export async function listTiers(): Promise<ServiceTier[]> {
   return rows.map(mapTier)
 }
 
-// Cross-request TTL memo for the resolve path (see listRulesCached). Admin
+// Cross-request TTL memo for the resolve path (see getSettingsCached). Admin
 // writes go through getTier/create/update/delete and invalidate below.
 const tiersCache = ttlCached(listTiers, 10_000)
 export const listTiersCached = (): Promise<ServiceTier[]> => tiersCache.get()
@@ -55,16 +53,15 @@ export async function getTier(id: string): Promise<ServiceTier | null> {
 export type TierInput = {
   key: string
   label: string
-  supplier: string | null
+  description: string | null
   position?: number
-  dispatchLeadDelta: number
-  transitDelta: number
+  transitDays: number
   minLeadDays: number | null
 }
 
-// A key unique across all tiers. Same-named tiers (one per supplier) now
-// coexist, so the caller's desired key can already be taken; append -2, -3 …
-// until it is free rather than letting the UNIQUE index throw a 500.
+// A key unique across all services. The caller's desired key can already be
+// taken; append -2, -3 … until it is free rather than letting the UNIQUE index
+// throw a 500.
 async function ensureUniqueKey(desired: string): Promise<string> {
   const base = desired || 'tier'
   const taken = new Set(
@@ -82,15 +79,15 @@ export async function createTier(input: TierInput): Promise<ServiceTier> {
   const key = await ensureUniqueKey(input.key)
   await prisma.$executeRaw`
     INSERT INTO "ash_service_tiers" (
-      "id", "key", "label", "supplier", "position", "dispatch_lead_delta",
-      "transit_delta", "min_lead_days", "created_at", "updated_at"
+      "id", "key", "label", "description", "position", "transit_days",
+      "min_lead_days", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${key}, ${input.label}, ${input.supplier}, ${input.position ?? 0},
-      ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${id}, ${key}, ${input.label}, ${input.description}, ${input.position ?? 0},
+      ${input.transitDays}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
   `
   const row = await getTier(id)
-  if (!row) throw new Error('Failed to create service tier')
+  if (!row) throw new Error('Failed to create delivery service')
   tiersCache.invalidate()
   return row
 }
@@ -99,10 +96,9 @@ export async function updateTier(id: string, patch: Partial<TierInput>): Promise
   const sets: Prisma.Sql[] = []
   if (patch.key !== undefined) sets.push(Prisma.sql`"key" = ${patch.key}`)
   if (patch.label !== undefined) sets.push(Prisma.sql`"label" = ${patch.label}`)
-  if (patch.supplier !== undefined) sets.push(Prisma.sql`"supplier" = ${patch.supplier}`)
+  if (patch.description !== undefined) sets.push(Prisma.sql`"description" = ${patch.description}`)
   if (patch.position !== undefined) sets.push(Prisma.sql`"position" = ${patch.position}`)
-  if (patch.dispatchLeadDelta !== undefined) sets.push(Prisma.sql`"dispatch_lead_delta" = ${patch.dispatchLeadDelta}`)
-  if (patch.transitDelta !== undefined) sets.push(Prisma.sql`"transit_delta" = ${patch.transitDelta}`)
+  if (patch.transitDays !== undefined) sets.push(Prisma.sql`"transit_days" = ${patch.transitDays}`)
   if (patch.minLeadDays !== undefined) sets.push(Prisma.sql`"min_lead_days" = ${patch.minLeadDays}`)
   if (sets.length === 0) return
   sets.push(Prisma.sql`"updated_at" = CURRENT_TIMESTAMP`)
@@ -118,7 +114,7 @@ export async function deleteTier(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Per-scope price / availability for a tier (ash_tier_scope_config)
+// Per-scope price / timing for a service (ash_tier_scope_config)
 // ---------------------------------------------------------------------------
 
 export async function listTierConfig(): Promise<TierScopeConfig[]> {
@@ -128,7 +124,7 @@ export async function listTierConfig(): Promise<TierScopeConfig[]> {
   return rows.map(mapConfig)
 }
 
-// Cross-request TTL memo for the resolve path (see listRulesCached).
+// Cross-request TTL memo for the resolve path (see getSettingsCached).
 const tierConfigCache = ttlCached(listTierConfig, 10_000)
 export const listTierConfigCached = (): Promise<TierScopeConfig[]> => tierConfigCache.get()
 export const invalidateTierConfigCache = (): void => tierConfigCache.invalidate()
@@ -147,9 +143,8 @@ export type TierConfigInput = {
   available: boolean
   price: number
   perPerson: boolean
-  // Nullable timing overrides; null inherits the tier's own timing.
-  dispatchLeadDelta: number | null
-  transitDelta: number | null
+  // Nullable absolute timing overrides; null inherits the service's own.
+  transitDays: number | null
   minLeadDays: number | null
 }
 
@@ -161,17 +156,16 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   await prisma.$executeRaw`
     INSERT INTO "ash_tier_scope_config" (
       "id", "tier_id", "scope_type", "scope_ref", "available", "price", "per_person",
-      "dispatch_lead_delta", "transit_delta", "min_lead_days", "created_at", "updated_at"
+      "transit_days", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
       ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price}, ${input.perPerson},
-      ${input.dispatchLeadDelta}, ${input.transitDelta}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${input.transitDays}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("tier_id", "scope_type", COALESCE("scope_ref", '')) DO UPDATE SET
       "available" = ${input.available},
       "price" = ${input.price},
       "per_person" = ${input.perPerson},
-      "dispatch_lead_delta" = ${input.dispatchLeadDelta},
-      "transit_delta" = ${input.transitDelta},
+      "transit_days" = ${input.transitDays},
       "min_lead_days" = ${input.minLeadDays},
       "updated_at" = CURRENT_TIMESTAMP
   `

@@ -1,22 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { pickMostSpecific, applyOverride, latestRule, ruleToResolved, parsePersonCount, tierAppliesToSupplier, tierModifiers } from '@/modules/advanced-shipping-for-shop/lib/resolve'
-import type { DeliveryRule, ProductOverride, ScopeType, ServiceTier, StockState, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { pickMostSpecific, latestConfig, parsePersonCount, tierModifiers } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import type { ScopeType, ServiceTier, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
 
-function rule(scopeType: ScopeType, scopeRef: string | null, patch: Partial<DeliveryRule> = {}): DeliveryRule {
+function config(scopeType: ScopeType, scopeRef: string | null, patch: Partial<TierScopeConfig> = {}): TierScopeConfig {
   return {
     id: `${scopeType}:${scopeRef ?? 'default'}`,
+    tierId: 't1',
     scopeType,
     scopeRef,
-    fulfilmentMode: 'STOCKED',
-    cutoffTime: '12:00',
-    dispatchLeadDays: 1,
-    mtoLeadDays: 10,
-    transitDays: 2,
-    shipDays: [1, 2, 3, 4, 5],
-    backorderLeadDays: null,
-    position: 0,
+    available: true,
+    price: '0.00',
+    perPerson: false,
+    transitDays: null,
+    minLeadDays: null,
     ...patch,
   }
+}
+
+const TIER: ServiceTier = {
+  id: 't1', key: 'standard', label: 'Standard delivery', description: null, position: 0,
+  transitDays: 5, minLeadDays: null,
 }
 
 const CTX = {
@@ -25,21 +28,13 @@ const CTX = {
   supplier: 'Acme',
 }
 
-const IN_STOCK: StockState = {
-  trackInventory: true,
-  stockCount: 10,
-  outOfStockBehaviour: 'BLOCK',
-  isPreOrder: false,
-  preOrderDispatchDate: null,
-}
-
 describe('pickMostSpecific', () => {
   const all = [
-    rule('DEFAULT', null),
-    rule('SUPPLIER', 'Acme'),
-    rule('CATEGORY', 'cat-parent'),
-    rule('CATEGORY', 'cat-self'),
-    rule('RANGE', 'val-1'),
+    config('DEFAULT', null),
+    config('SUPPLIER', 'Acme'),
+    config('CATEGORY', 'cat-parent'),
+    config('CATEGORY', 'cat-self'),
+    config('RANGE', 'val-1'),
   ]
 
   it('range beats category beats supplier beats default', () => {
@@ -54,100 +49,71 @@ describe('pickMostSpecific', () => {
   })
 
   it('falls to supplier when no range or category matches', () => {
-    const rows = [rule('DEFAULT', null), rule('SUPPLIER', 'Acme')]
+    const rows = [config('DEFAULT', null), config('SUPPLIER', 'Acme')]
     expect(pickMostSpecific(rows, CTX)[0]!.scopeType).toBe('SUPPLIER')
   })
 
   it('falls to default when nothing else matches', () => {
-    const rows = [rule('DEFAULT', null), rule('SUPPLIER', 'Someone Else'), rule('CATEGORY', 'cat-x'), rule('RANGE', 'val-x')]
+    const rows = [config('DEFAULT', null), config('SUPPLIER', 'Someone Else'), config('CATEGORY', 'cat-x'), config('RANGE', 'val-x')]
     expect(pickMostSpecific(rows, CTX)[0]!.scopeType).toBe('DEFAULT')
   })
 
+  it('matches nothing when no row applies (the service is simply not offered)', () => {
+    const rows = [config('SUPPLIER', 'Someone Else'), config('RANGE', 'val-x')]
+    expect(pickMostSpecific(rows, CTX)).toHaveLength(0)
+  })
+
   it('returns every equal-specificity match for a multi-value range', () => {
-    const rows = [rule('RANGE', 'val-1'), rule('RANGE', 'val-2')]
+    const rows = [config('RANGE', 'val-1'), config('RANGE', 'val-2')]
     const ctx = { ...CTX, rangeValueIds: ['val-1', 'val-2'] }
     expect(pickMostSpecific(rows, ctx)).toHaveLength(2)
   })
 })
 
-describe('tierAppliesToSupplier', () => {
-  it('offers a supplier-agnostic tier to every product', () => {
-    expect(tierAppliesToSupplier({ supplier: null }, 'Acme')).toBe(true)
-    expect(tierAppliesToSupplier({ supplier: null }, null)).toBe(true)
-  })
-
-  it('offers a supplier-bound tier only to its own supplier', () => {
-    expect(tierAppliesToSupplier({ supplier: 'Acme' }, 'Acme')).toBe(true)
-    expect(tierAppliesToSupplier({ supplier: 'Acme' }, 'Other')).toBe(false)
-    expect(tierAppliesToSupplier({ supplier: 'Acme' }, null)).toBe(false)
-  })
-})
-
-describe('applyOverride', () => {
-  const base = ruleToResolved(rule('DEFAULT', null))
-
-  it('patches only the non-null override fields', () => {
-    const override: ProductOverride = {
-      productId: 'p1',
-      fulfilmentMode: null,
-      mtoLeadDays: null,
-      cutoffTime: '15:00',
-      dispatchLeadDays: 5,
-      transitDays: null,
-      backorderLeadDays: null,
-      disabled: false,
-    }
-    const patched = applyOverride(base, override)
-    expect(patched.cutoffTime).toBe('15:00')
-    expect(patched.dispatchLeadDays).toBe(5)
-    expect(patched.transitDays).toBe(base.transitDays) // untouched
-    expect(patched.fulfilmentMode).toBe('STOCKED')
-  })
-
-  it('returns the rule unchanged when there is no override', () => {
-    expect(applyOverride(base, undefined)).toEqual(base)
-  })
-})
-
-describe('latestRule', () => {
+describe('latestConfig', () => {
   it('picks the candidate that delivers latest (never over-promise)', () => {
-    const quick = rule('RANGE', 'val-1', { transitDays: 2 })
-    const slow = rule('RANGE', 'val-2', { transitDays: 10 })
-    const ctx = { now: new Date('2026-07-24T09:00:00Z'), timezone: 'Europe/London', holidays: new Set<string>() }
-    expect(latestRule([quick, slow], IN_STOCK, ctx).id).toBe(slow.id)
-    expect(latestRule([slow, quick], IN_STOCK, ctx).id).toBe(slow.id)
+    const quick = config('RANGE', 'val-1', { transitDays: 2 })
+    const slow = config('RANGE', 'val-2', { transitDays: 10 })
+    expect(latestConfig(TIER, [quick, slow]).id).toBe(slow.id)
+    expect(latestConfig(TIER, [slow, quick]).id).toBe(slow.id)
+  })
+
+  it('treats an inherited transit as the service default', () => {
+    const inherits = config('RANGE', 'val-1') // inherits 5 from the service
+    const slower = config('RANGE', 'val-2', { transitDays: 7 })
+    expect(latestConfig(TIER, [inherits, slower]).id).toBe(slower.id)
+    const quicker = config('RANGE', 'val-3', { transitDays: 3 })
+    expect(latestConfig(TIER, [inherits, quicker]).id).toBe(inherits.id)
+  })
+
+  it('breaks a transit tie on the larger minimum floor', () => {
+    const noFloor = config('RANGE', 'val-1')
+    const floored = config('RANGE', 'val-2', { minLeadDays: 10 })
+    expect(latestConfig(TIER, [noFloor, floored]).id).toBe(floored.id)
   })
 })
 
 describe('tierModifiers', () => {
-  const tier: ServiceTier = {
-    id: 't1', key: 'installation', label: 'Installation', supplier: null, position: 0,
-    dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5,
-  }
-  const config = (patch: Partial<TierScopeConfig>): TierScopeConfig => ({
-    id: 'c1', tierId: 't1', scopeType: 'RANGE', scopeRef: 'val-1', available: true, price: '25.95', perPerson: false,
-    dispatchLeadDelta: null, transitDelta: null, minLeadDays: null,
-    ...patch,
+  const tier: ServiceTier = { ...TIER, key: 'installation', label: 'Installation', transitDays: 10, minLeadDays: 5 }
+
+  it('uses the service timing when the scope overrides nothing', () => {
+    expect(tierModifiers(tier, config('RANGE', 'val-1'))).toEqual({ transitDays: 10, minLeadDays: 5 })
   })
 
-  it('uses the tier timing when the scope overrides nothing', () => {
-    expect(tierModifiers(tier, config({}))).toEqual({ dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
-  })
-
-  it('uses the tier timing when there is no scope config at all', () => {
-    expect(tierModifiers(tier)).toEqual({ dispatchLeadDelta: 0, transitDelta: 10, minLeadDays: 5 })
+  it('uses the service timing when there is no scope config at all', () => {
+    expect(tierModifiers(tier)).toEqual({ transitDays: 10, minLeadDays: 5 })
   })
 
   it('patches only the non-null scope fields', () => {
-    expect(tierModifiers(tier, config({ transitDelta: 30 }))).toEqual({ dispatchLeadDelta: 0, transitDelta: 30, minLeadDays: 5 })
+    expect(tierModifiers(tier, config('RANGE', 'val-1', { transitDays: 30 }))).toEqual({ transitDays: 30, minLeadDays: 5 })
   })
 
-  it('a scope can lift the tier minimum with an explicit 0', () => {
-    expect(tierModifiers(tier, config({ minLeadDays: 0 })).minLeadDays).toBe(0)
+  it('a scope can lift the service minimum with an explicit 0', () => {
+    expect(tierModifiers(tier, config('RANGE', 'val-1', { minLeadDays: 0 })).minLeadDays).toBe(0)
   })
 
-  it('a scope can override the dispatch delta with an explicit 0', () => {
-    expect(tierModifiers({ ...tier, dispatchLeadDelta: 3 }, config({ dispatchLeadDelta: 0 })).dispatchLeadDelta).toBe(0)
+  it('a scope can set a zero transit with an explicit 0', () => {
+    expect(tierModifiers(tier, config('RANGE', 'val-1', { transitDays: 0 })).transitDays).toBe(0)
   })
 })
 

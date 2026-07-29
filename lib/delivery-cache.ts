@@ -26,9 +26,9 @@ export async function prefetchProductDeliveries(productIds: string[], ctx: Resol
 }
 
 // The delivery for one product, served from the request batch when present.
-// After a prefetch, an absent product is definitively "no matching rule" (the
-// batch map only holds products that resolved to one), so we never re-query for
-// it. Without a prefetch we resolve just this product and cache the result so a
+// After a prefetch, an absent product is definitively "no service offered" (the
+// batch map only holds products that resolved to at least one), so we never
+// re-query for it. Without a prefetch we resolve just this product and cache the result so a
 // repeat line for the same product is free.
 export async function getProductDelivery(
   productId: string,

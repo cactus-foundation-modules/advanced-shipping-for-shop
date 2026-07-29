@@ -5,6 +5,8 @@ import { requireShopUser } from '@/modules/shop/lib/access'
 import { getSettings, updateSettings } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 import { HOLIDAY_REGIONS } from '@/modules/advanced-shipping-for-shop/lib/types'
 
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
+
 export async function GET() {
   const gate = await requireShopUser('shop.manage')
   if (gate.error) return gate.error
@@ -17,6 +19,9 @@ const PatchBody = z.object({
   defaultTierKey: z.string().nullable().optional(),
   cartControlStyle: z.enum(['dropdown', 'radios']).optional(),
   perPersonAttributeId: z.string().nullable().optional(),
+  cutoffTime: z.string().regex(TIME_RE, 'Cut-off must be a 24-hour HH:MM time').optional(),
+  dispatchLeadDays: z.number().int().min(0).max(365).optional(),
+  shipDays: z.array(z.number().int().min(0).max(6)).min(1, 'Pick at least one ship day').optional(),
 })
 
 export async function PATCH(request: NextRequest) {

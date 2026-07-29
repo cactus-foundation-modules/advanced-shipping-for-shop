@@ -1,8 +1,9 @@
-// shop.cart-line-resolver provider: prices the shopper's chosen delivery tier
-// into the cart + order (server-authoritative), snapshots the tier and promised
-// date onto the order line, and offers the tier picker the cart renders. Returns
-// NOOP for any line that has no tiers offered, so it never disturbs a plain line
-// or another module's personalisation (shop folds every resolver additively).
+// shop.cart-line-resolver provider: prices the shopper's chosen delivery
+// service into the cart + order (server-authoritative), snapshots the service
+// and promised date onto the order line, and offers the service picker the cart
+// renders. Returns NOOP for any line that has no services offered, so it never
+// disturbs a plain line or another module's personalisation (shop folds every
+// resolver additively).
 import type { CartLineResolution } from '@/modules/shop/lib/line-meta'
 import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
@@ -15,10 +16,10 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
-// The amount a tier adds to a line: its base price, or base × person count when
-// it is priced per person. Returns null for a per-person tier on a line with no
-// readable count - it cannot be priced, so the line is blocked rather than
-// guessed. Rounded to the penny so the optimistic client figure matches this.
+// The amount a service adds to a line: its base price, or base × person count
+// when it is priced per person. Returns null for a per-person service on a line
+// with no readable count - it cannot be priced, so the line is blocked rather
+// than guessed. Rounded to the penny so the optimistic client figure matches.
 export function effectiveTierPrice(t: ResolvedTierOption, count: number | null): number | null {
   const base = Number(t.price) || 0
   if (!t.perPerson) return base
@@ -28,7 +29,7 @@ export function effectiveTierPrice(t: ResolvedTierOption, count: number | null):
 
 function tierOptionLabel(label: string, price: number | null, symbol: string, byLabel: string | null): string {
   const base = byLabel ? `${label} by ${byLabel}` : label
-  // A per-person tier on a line whose count could not be read has no price to
+  // A per-person service on a line whose count could not be read has no price to
   // show; the shopper is told it is priced per person and the line blocks on
   // selection until a person count is set.
   if (price == null) return `${base} (price per person)`
@@ -44,9 +45,9 @@ export async function resolveShippingTierLineMeta(
   // Served from the request batch cache when shop prefetched the whole cart (the
   // fast path); falls back to a single resolve otherwise.
   const delivery = await getProductDelivery(product.id, ctx)
-  // No rule, disabled, or no tiers configured -> this module has nothing to add
+  // No services configured for this product -> this module has nothing to add
   // to the line. Stay out of the fold entirely.
-  if (!delivery || delivery.disabled || delivery.tiers.length === 0) return NOOP
+  if (!delivery || delivery.tiers.length === 0) return NOOP
 
   const settings = await getSettingsCached()
   const requested = meta && typeof meta.shippingTier === 'string' ? meta.shippingTier : undefined
@@ -61,7 +62,7 @@ export async function resolveShippingTierLineMeta(
     now: ctx.now,
     timezone: ctx.timezone,
     holidays: ctx.holidays,
-    rule: delivery.rule,
+    timing: settings,
     tier: tierOption.modifiers,
     stock: delivery.stock,
   })
@@ -77,17 +78,19 @@ export async function resolveShippingTierLineMeta(
     // renders the picker bare. An older shop ignores the flag and shows both.
     optionsSelfLabelled: true,
     // priceAdjust rides along per option so a new-enough shop can move the line
-    // price optimistically the instant the shopper picks a tier, before the
+    // price optimistically the instant the shopper picks a service, before the
     // server re-validate confirms it. Older shops simply ignore the field.
     // Each option's own promised date is baked into its label ("Express
-    // Delivery by Monday (+£4.95)") so the shopper sees when every tier lands
-    // without picking it - one estimate per tier, all cheap and IO-free.
+    // Delivery by Monday (+£4.95)") so the shopper sees when every service lands
+    // without picking it - one estimate per service, all cheap and IO-free. The
+    // service's own description rides along for a new-enough shop to show under
+    // the option; an older shop ignores it.
     options: delivery.tiers.map((t) => {
       const tEst = computeEstimate({
         now: ctx.now,
         timezone: ctx.timezone,
         holidays: ctx.holidays,
-        rule: delivery.rule,
+        timing: settings,
         tier: t.modifiers,
         stock: delivery.stock,
       })
@@ -97,6 +100,7 @@ export async function resolveShippingTierLineMeta(
         value: t.key,
         label: tierOptionLabel(t.label, eff, currencySymbol, byLabel),
         priceAdjust: eff ?? 0,
+        description: t.description ?? undefined,
       }
     }),
     // Shop renders a dropdown by default; the shop owner can switch the cart to a
@@ -105,9 +109,10 @@ export async function resolveShippingTierLineMeta(
     renderAs: settings.cartControlStyle === 'radios' ? ('radios' as const) : ('select' as const),
   }
 
-  // A per-person tier on a line whose count could not be read cannot be priced,
-  // so the line is blocked (never silently mispriced) with a plain-English
-  // reason, exactly as the shop owner chose over falling back to a flat price.
+  // A per-person service on a line whose count could not be read cannot be
+  // priced, so the line is blocked (never silently mispriced) with a
+  // plain-English reason, exactly as the shop owner chose over falling back to
+  // a flat price.
   const chosenPrice = effectiveTierPrice(tierOption, delivery.perPersonCount)
   if (chosenPrice == null) {
     return { valid: false, priceAdjust: 0, persistMeta: null, reason: 'Set the number of people for this item to price its delivery', control }

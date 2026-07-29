@@ -1,8 +1,8 @@
 'use client'
 
-// Shared scope picker used by both the Rules and Service-tier pricing screens:
-// a scope-type select plus a matching reference select (supplier name, category
-// id, or range value id). DEFAULT needs no reference.
+// Scope picker for delivery-service price rows: a scope-type select plus a
+// matching reference select (supplier name, category id, or range value id).
+// DEFAULT needs no reference.
 import type { ScopeType } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 export type ScopeOptions = {
@@ -31,8 +31,6 @@ export function ScopePicker({
   options: ScopeOptions
   onChange: (scopeType: ScopeType, scopeRef: string | null) => void
   allowRange: boolean
-  // Service-tier prices no longer scope by supplier (a tier carries its own
-  // supplier), so that screen hides the SUPPLIER option. Rules still use it.
   allowSupplier?: boolean
 }) {
   const base: ScopeType[] = allowSupplier ? ['DEFAULT', 'SUPPLIER', 'CATEGORY'] : ['DEFAULT', 'CATEGORY']

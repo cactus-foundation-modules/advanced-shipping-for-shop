@@ -1,7 +1,7 @@
 {
   "name": "cactus-module-advanced-shipping-for-shop",
-  "version": "0.1.17",
-  "description": "Advanced shipping (delivery dates and service tiers) for the Cactus shop",
+  "version": "0.1.18",
+  "description": "Advanced shipping (delivery dates and delivery services) for the Cactus shop",
   "license": "MIT",
   "private": true
 }

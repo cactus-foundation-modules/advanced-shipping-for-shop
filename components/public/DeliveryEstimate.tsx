@@ -14,7 +14,6 @@ type ItemEstimate = {
   reason?: string
   targetLabel: string | null
   cutoffInstantISO: string | null
-  isMadeToOrder: boolean
   isBackorder: boolean
   isPreOrder: boolean
 }
@@ -99,13 +98,12 @@ export function DeliveryEstimate({ slug: slugProp, preview }: { slug?: string; p
 
   const remaining = cutoffMs != null ? cutoffMs - now : null
   const beforeCutoff = remaining != null && remaining > 0
-  const prefix = estimate.isMadeToOrder ? 'Made to order - delivery by ' : 'Delivery by '
 
   return (
     <>
       <style>{css}</style>
       <p className="ash-delivery">
-        {prefix}
+        {'Delivery by '}
         <span className="ash-delivery-date">{estimate.targetLabel}</span>
         {estimate.isBackorder ? ' (on backorder)' : ''}
         {estimate.isPreOrder ? ' (pre-order)' : ''}
@@ -122,7 +120,6 @@ const PREVIEW: ItemEstimate = {
   available: true,
   targetLabel: 'Tue 29 Jul',
   cutoffInstantISO: null,
-  isMadeToOrder: false,
   isBackorder: false,
   isPreOrder: false,
 }

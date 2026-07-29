@@ -5,67 +5,55 @@
 -- (lib/backup/serialize.ts): TEXT, INTEGER, NUMERIC, BOOLEAN, JSONB, DATE,
 -- TIMESTAMP. Times of day (cut-offs) are stored as TEXT "HH:MM" - a plain string
 -- London wall-clock, never a TIME/TIMESTAMP, so no zone maths hides in the column.
+--
+-- One concept carries the whole estimate: the delivery service (ash_service_tiers)
+-- and its per-scope grid (ash_tier_scope_config). Dispatch timing (cut-off, lead,
+-- ship days) is shop-wide on ash_settings; each service carries its own transit
+-- time in working days, overridable per range/category/supplier in the grid.
+-- (Earlier installs had a separate ash_delivery_rules table plus per-product
+-- overrides; migration 007 folds those into this shape.)
 
 -- Singleton module settings. `range_attribute_id` names which product attribute
--- (pat_attributes.id) is treated as the product's "range" for rule matching -
+-- (pat_attributes.id) is treated as the product's "range" for scope matching -
 -- nullable, because a shop need not use ranges. Timezone is read live from core
--- config, never copied here.
+-- config, never copied here. Dispatch timing lives here because it is a fact
+-- about the warehouse, not about any one delivery service: `cutoff_time` is the
+-- order-by time on a ship day, `dispatch_lead_days` the working days from
+-- clearing the cut-off to handover, `ship_days` a JSON array of weekday numbers
+-- (0=Sun .. 6=Sat) the courier collects on.
 CREATE TABLE IF NOT EXISTS "ash_settings" (
     "id" TEXT NOT NULL DEFAULT 'singleton',
     "range_attribute_id" TEXT,
     "holiday_region" TEXT NOT NULL DEFAULT 'england-and-wales',
     "holidays_synced_at" TIMESTAMP(3),
     "default_tier_key" TEXT,
-    -- 'dropdown' | 'radios': how the cart shows the per-line tier picker.
+    -- 'dropdown' | 'radios': how the cart shows the per-line service picker.
     "cart_control_style" TEXT NOT NULL DEFAULT 'dropdown',
+    -- Product attribute (pat_attributes.id) whose value carries the person count
+    -- for per-person service pricing. Null = no per-person pricing.
+    "per_person_attribute_id" TEXT,
+    "cutoff_time" TEXT NOT NULL DEFAULT '12:00',
+    "dispatch_lead_days" INTEGER NOT NULL DEFAULT 1,
+    "ship_days" JSONB NOT NULL DEFAULT '[1, 2, 3, 4, 5]',
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ash_settings_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "ash_settings_singleton" CHECK ("id" = 'singleton')
 );
 INSERT INTO "ash_settings" ("id") VALUES ('singleton') ON CONFLICT ("id") DO NOTHING;
 
--- One delivery rule per scope. `scope_type` is DEFAULT | SUPPLIER | CATEGORY |
--- RANGE; `scope_ref` is the supplier name, shp_categories.id, or
--- pat_attribute_values.id it keys on (NULL for DEFAULT). A product resolves to
--- the most specific list it matches: range, else category, else supplier, else
--- default - the whole winning rule is used, no field-level inheritance.
---   fulfilment_mode STOCKED     -> cut-off -> dispatch lead -> transit
---   fulfilment_mode MADE_TO_ORDER -> mto_lead_days -> transit (no cut-off)
--- ship_days is a JSON array of weekday numbers (0=Sun .. 6=Sat) the courier
--- collects on; default Mon-Fri.
-CREATE TABLE IF NOT EXISTS "ash_delivery_rules" (
-    "id" TEXT NOT NULL,
-    "scope_type" TEXT NOT NULL,
-    "scope_ref" TEXT,
-    "fulfilment_mode" TEXT NOT NULL DEFAULT 'STOCKED',
-    "cutoff_time" TEXT NOT NULL DEFAULT '12:00',
-    "dispatch_lead_days" INTEGER NOT NULL DEFAULT 1,
-    "mto_lead_days" INTEGER NOT NULL DEFAULT 10,
-    "transit_days" INTEGER NOT NULL DEFAULT 2,
-    "ship_days" JSONB NOT NULL DEFAULT '[1, 2, 3, 4, 5]',
-    "backorder_lead_days" INTEGER,
-    "position" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ash_delivery_rules_pkey" PRIMARY KEY ("id")
-);
--- One rule per scope. scope_ref is NULL for DEFAULT, so COALESCE keeps the
--- uniqueness real (a plain UNIQUE treats every NULL as distinct, which would let
--- two default rules coexist).
-CREATE UNIQUE INDEX IF NOT EXISTS "ash_delivery_rules_scope_key"
-    ON "ash_delivery_rules" ("scope_type", COALESCE("scope_ref", ''));
-
--- A purchasable delivery-and-assembly service tier (e.g. standard, next-day,
--- prebuilt-standard, full-install). Timing modifiers are applied on top of the
--- resolved rule: shift dispatch/transit, or floor the whole estimate at a
--- working-day minimum (e.g. full installation ~10 days).
+-- A purchasable delivery service (e.g. standard, express, full installation).
+-- `transit_days` is the service's usual courier time in working days, added on
+-- top of the shop-wide dispatch timing; `min_lead_days` floors the whole
+-- estimate at a working-day minimum (e.g. full installation ~10 days), never
+-- brings it in. `description` is shopper-facing copy shown beside the service
+-- wherever it is offered.
 CREATE TABLE IF NOT EXISTS "ash_service_tiers" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "label" TEXT NOT NULL,
+    "description" TEXT,
     "position" INTEGER NOT NULL DEFAULT 0,
-    "dispatch_lead_delta" INTEGER NOT NULL DEFAULT 0,
-    "transit_delta" INTEGER NOT NULL DEFAULT 0,
+    "transit_days" INTEGER NOT NULL DEFAULT 0,
     "min_lead_days" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -73,9 +61,15 @@ CREATE TABLE IF NOT EXISTS "ash_service_tiers" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "ash_service_tiers_key_key" ON "ash_service_tiers" ("key");
 
--- Per-scope price and availability for a tier, resolved most-specific-wins per
--- product just like rules (so Seating can be priced differently from other
--- categories). scope_ref semantics match ash_delivery_rules.
+-- Where a service is offered, and at what price and timing. `scope_type` is
+-- DEFAULT | SUPPLIER | CATEGORY | RANGE; `scope_ref` is the supplier name,
+-- shp_categories.id, or pat_attribute_values.id it keys on (NULL for DEFAULT).
+-- A product resolves each service to the most specific row that matches: range,
+-- else category (nearest ancestor), else supplier, else default. A service with
+-- no matching row is simply not offered for that product - absence is the
+-- availability switch, which is also how a service is limited to one supplier
+-- (give it a single SUPPLIER row). `transit_days` / `min_lead_days` are absolute
+-- working-day values; NULL inherits the service's own.
 CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "id" TEXT NOT NULL,
     "tier_id" TEXT NOT NULL,
@@ -83,10 +77,10 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "scope_ref" TEXT,
     "available" BOOLEAN NOT NULL DEFAULT true,
     "price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    -- Nullable per-scope timing overrides (005 adds these on existing installs;
-    -- carried here too so fresh installs match). NULL inherits the tier's value.
-    "dispatch_lead_delta" INTEGER,
-    "transit_delta" INTEGER,
+    -- When true the price is per person: multiplied by the count read off the
+    -- attribute nominated in ash_settings.per_person_attribute_id.
+    "per_person" BOOLEAN NOT NULL DEFAULT false,
+    "transit_days" INTEGER,
     "min_lead_days" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +88,9 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     CONSTRAINT "ash_tier_scope_config_tier_fk"
         FOREIGN KEY ("tier_id") REFERENCES "ash_service_tiers"("id") ON DELETE CASCADE
 );
+-- One row per (service, scope). scope_ref is NULL for DEFAULT, so COALESCE keeps
+-- the uniqueness real (a plain UNIQUE treats every NULL as distinct, which would
+-- let two default rows coexist).
 CREATE UNIQUE INDEX IF NOT EXISTS "ash_tier_scope_config_key"
     ON "ash_tier_scope_config" ("tier_id", "scope_type", COALESCE("scope_ref", ''));
 
@@ -105,22 +102,4 @@ CREATE TABLE IF NOT EXISTS "ash_holidays" (
     "date" DATE NOT NULL,
     "name" TEXT NOT NULL,
     CONSTRAINT "ash_holidays_pkey" PRIMARY KEY ("region", "date")
-);
-
--- Per-product exception layer. Any non-null field patches the winning rule for
--- that product (the one place field-level patching happens); `disabled` hides
--- the delivery estimate for the product entirely.
-CREATE TABLE IF NOT EXISTS "ash_product_overrides" (
-    "product_id" TEXT NOT NULL,
-    "fulfilment_mode" TEXT,
-    "mto_lead_days" INTEGER,
-    "cutoff_time" TEXT,
-    "dispatch_lead_days" INTEGER,
-    "transit_days" INTEGER,
-    "backorder_lead_days" INTEGER,
-    "disabled" BOOLEAN NOT NULL DEFAULT false,
-    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ash_product_overrides_pkey" PRIMARY KEY ("product_id"),
-    CONSTRAINT "ash_product_overrides_product_fk"
-        FOREIGN KEY ("product_id") REFERENCES "shp_products"("id") ON DELETE CASCADE
 );

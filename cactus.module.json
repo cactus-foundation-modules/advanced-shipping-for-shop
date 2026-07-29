@@ -1,8 +1,8 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "tablePrefix": "ash_",
-  "description": "Advanced delivery dates and per-item service tiers for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly tier picker priced into the order.",
+  "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
   "requiresModules": [
     { "name": "shop", "minVersion": "0.1.119" },
@@ -27,27 +27,9 @@
       "component": "prefetchShippingTierDeliveries"
     },
     {
-      "point": "shop.product-editor-sections",
-      "id": "advanced-shipping-delivery",
-      "label": "Delivery",
-      "order": 60,
-      "permission": "shop.products",
-      "import": "./components/admin/ProductDeliverySection",
-      "component": "ProductDeliverySection"
-    },
-    {
-      "point": "shop.tax-shipping-tabs",
-      "id": "delivery-rules",
-      "label": "Delivery rules",
-      "order": 10,
-      "permission": "shop.manage",
-      "import": "./components/admin/RulesScreen",
-      "component": "RulesScreen"
-    },
-    {
       "point": "shop.tax-shipping-tabs",
       "id": "service-tiers",
-      "label": "Service tiers",
+      "label": "Delivery services",
       "order": 20,
       "permission": "shop.manage",
       "import": "./components/admin/TiersScreen",
