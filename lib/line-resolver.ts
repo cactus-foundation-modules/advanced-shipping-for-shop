@@ -7,6 +7,7 @@
 import type { CartLineResolution } from '@/modules/shop/lib/line-meta'
 import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
+import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { findTierOption, type ProductDelivery, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
@@ -97,6 +98,15 @@ export async function resolveShippingTierLineMeta(
   })
 
   const { currencySymbol } = await getShopConfigCached()
+  // A service's charge is folded into the line price, so it is taxed at the
+  // product's own rate - which means it has to be printed on the same side of
+  // tax as that price. Shop converts the numeric `priceAdjust` below itself (it
+  // owns that arithmetic for every resolver); the option WORDING is ours, and
+  // shop never re-words it, so the labels are converted here. Hence `shown` for
+  // the labels and the raw figure for `priceAdjust`.
+  const taxDisplay = await resolveTaxDisplay()
+  const adjustPrice = makeDisplayAdjuster(taxDisplay, product.taxClassId)
+  const shown = (price: number | null) => (price != null && adjustPrice ? adjustPrice(price) : price)
   const todayStr = todayInZone(ctx.now, ctx.timezone)
   const control = {
     key: 'shippingTier',
@@ -128,12 +138,12 @@ export async function resolveShippingTierLineMeta(
       const eff = effectiveTierPrice(t, delivery.perPersonCount)
       return {
         value: t.key,
-        label: tierOptionLabel(t.label, eff, currencySymbol, byLabel),
+        label: tierOptionLabel(t.label, shown(eff), currencySymbol, byLabel),
         priceAdjust: eff ?? 0,
         description: t.description ?? undefined,
         // The same wording pre-split for the summary presentation. A shop too
         // old to read it ignores the field and renders from `label` as before.
-        summary: tierOptionSummary(t.label, eff, currencySymbol, byLabel, dateLabel),
+        summary: tierOptionSummary(t.label, shown(eff), currencySymbol, byLabel, dateLabel),
       }
     }),
     // The shop owner picks the basket's picker in Delivery settings: the chosen

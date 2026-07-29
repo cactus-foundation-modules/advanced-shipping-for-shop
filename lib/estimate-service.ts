@@ -11,6 +11,7 @@ import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estima
 import { resolveProductDeliveries, findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 
 // `ref` is the caller's own handle on the item, echoed back untouched. The
 // basket needs it: two lines of the same product on different services are one
@@ -84,13 +85,16 @@ const EMPTY_ITEM = (productId: string, ref: string | null, name: string | null):
 // Product names for the whole set in one query. The delivery resolver reads the
 // scope columns it needs and no more, so the name is fetched here rather than
 // widening that hot path for the one caller that wants it.
-async function getProductNames(productIds: string[]): Promise<Map<string, string>> {
+// The tax class rides along on the same read: every price this service quotes
+// has to be printed on the same side of tax as the product it is added to, and
+// that is decided by the product's own class (see shop's lib/tax-display.ts).
+async function getProductNames(productIds: string[]): Promise<Map<string, { name: string; taxClassId: string | null }>> {
   const unique = [...new Set(productIds)]
   if (unique.length === 0) return new Map()
-  const rows = await prisma.$queryRaw<{ id: string; name: string }[]>`
-    SELECT "id", "name" FROM "shp_products" WHERE "id" IN (${Prisma.join(unique)})
+  const rows = await prisma.$queryRaw<{ id: string; name: string; tax_class_id: string | null }[]>`
+    SELECT "id", "name", "tax_class_id" FROM "shp_products" WHERE "id" IN (${Prisma.join(unique)})
   `
-  return new Map(rows.map((r) => [r.id, r.name]))
+  return new Map(rows.map((r) => [r.id, { name: r.name, taxClassId: r.tax_class_id }]))
 }
 
 // Which service to price for an item: the shopper's choice if it is still
@@ -104,10 +108,11 @@ function chooseTier(delivery: ProductDelivery, requestedKey: string | undefined,
 export async function estimateItems(inputs: EstimateItemInput[], now: Date = new Date()): Promise<EstimateResult> {
   const productIds = inputs.map((i) => i.productId)
   const ctx = await getResolveContext(now)
-  const [settings, deliveries, nameByProduct] = await Promise.all([
+  const [settings, deliveries, productById, taxDisplay] = await Promise.all([
     getSettingsCached(),
     resolveProductDeliveries(productIds, ctx),
     getProductNames(productIds),
+    resolveTaxDisplay(),
   ])
 
   const items: ItemEstimate[] = []
@@ -117,7 +122,13 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
 
   for (const input of inputs) {
     const ref = input.ref ?? null
-    const name = nameByProduct.get(input.productId) ?? null
+    const product = productById.get(input.productId)
+    const name = product?.name ?? null
+    // Every figure this estimate reports is display-only - the cart re-prices
+    // the chosen service server-side - so it is converted to whichever side of
+    // tax the shop prints on, at this product's own rate.
+    const adjustPrice = makeDisplayAdjuster(taxDisplay, product?.taxClassId)
+    const shown = (price: number | null) => (price != null && adjustPrice ? adjustPrice(price) : price)
     const delivery = deliveries.get(input.productId)
     const tierKey = delivery ? chooseTier(delivery, input.tierKey, settings.defaultTierKey) : null
     const tierOption = delivery && tierKey ? findTierOption(delivery, tierKey) : null
@@ -165,8 +176,11 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           key: t.key,
           label: t.label,
           description: t.description,
+          // The service's configured base price, left exactly as recorded - it
+          // is the raw setting, not a figure any storefront prints. What IS
+          // printed is `priceEffective` below, and that is converted.
           price: t.price,
-          priceEffective: effectiveTierPrice(t, delivery.perPersonCount),
+          priceEffective: shown(effectiveTierPrice(t, delivery.perPersonCount)),
           targetDate: dated,
           targetLabel: dated ? formatDeliveryDate(dated) : null,
         }
