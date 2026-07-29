@@ -11,7 +11,7 @@ const FALLBACK: AshSettings = {
   holidayRegion: 'england-and-wales',
   holidaysSyncedAt: null,
   defaultTierKey: null,
-  cartControlStyle: 'dropdown',
+  cartControlStyle: 'summary',
   perPersonAttributeId: null,
   cutoffTime: '12:00',
   dispatchLeadDays: 1,
@@ -37,7 +37,7 @@ function mapRow(r: Record<string, unknown>): AshSettings {
     holidayRegion: region && isHolidayRegion(region) ? region : 'england-and-wales',
     holidaysSyncedAt: synced ? new Date(synced).toISOString() : null,
     defaultTierKey: (r.default_tier_key as string | null) ?? null,
-    cartControlStyle: style && isCartControlStyle(style) ? style : 'dropdown',
+    cartControlStyle: style && isCartControlStyle(style) ? style : 'summary',
     perPersonAttributeId: (r.per_person_attribute_id as string | null) ?? null,
     cutoffTime: toCutoff(r.cutoff_time),
     dispatchLeadDays: r.dispatch_lead_days == null ? 1 : Math.max(0, Number(r.dispatch_lead_days)),
@@ -78,7 +78,7 @@ export async function updateSettings(input: {
   const current = await getSettings()
   const merged = { ...current, ...input }
   const region: HolidayRegion = isHolidayRegion(merged.holidayRegion) ? merged.holidayRegion : 'england-and-wales'
-  const style: CartControlStyle = isCartControlStyle(merged.cartControlStyle) ? merged.cartControlStyle : 'dropdown'
+  const style: CartControlStyle = isCartControlStyle(merged.cartControlStyle) ? merged.cartControlStyle : 'summary'
   const cutoff = toCutoff(merged.cutoffTime)
   const lead = Math.max(0, Math.trunc(merged.dispatchLeadDays))
   const shipDays = toShipDays(merged.shipDays)

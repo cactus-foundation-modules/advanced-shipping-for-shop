@@ -9,7 +9,7 @@ import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { findTierOption, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { findTierOption, type ProductDelivery, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
@@ -37,6 +37,39 @@ function tierOptionLabel(label: string, price: number | null, symbol: string, by
   return `${base} (+${symbol}${price.toFixed(2)})`
 }
 
+// The same option, broken into the parts the basket's summary presentation lays
+// out - so the basket never has to pick a label apart to find the date, the
+// service or the price. `headline` is what the line reads once this service is
+// the chosen one, `switchLabel` is the compact wording on the chip that swaps to
+// it, and `priceLabel` is the price on its own.
+export function tierOptionSummary(
+  label: string, price: number | null, symbol: string, byLabel: string | null, dateLabel: string | null,
+) {
+  return {
+    headline: dateLabel ? `Arrives by ${dateLabel}` : label,
+    secondary: dateLabel ? label : undefined,
+    switchLabel: byLabel ? `${label} by ${byLabel}` : label,
+    priceLabel: price == null ? 'Per person' : price <= 0 ? 'Free' : `+${symbol}${price.toFixed(2)}`,
+  }
+}
+
+// Which service a line is on: the shopper's own choice when they have made one
+// and it is still offered, else the shop's default service, else the first one
+// on the product. Shared by the line resolver and the basket-wide summary below
+// so the two can never promise different dates for the same line.
+export function chosenTierKey(
+  delivery: ProductDelivery,
+  meta: Record<string, unknown> | undefined,
+  defaultTierKey: string | null,
+): string {
+  const requested = meta && typeof meta.shippingTier === 'string' ? meta.shippingTier : undefined
+  return (
+    (requested && findTierOption(delivery, requested) && requested) ||
+    (defaultTierKey && findTierOption(delivery, defaultTierKey) && defaultTierKey) ||
+    delivery.tiers[0]!.key
+  )
+}
+
 export async function resolveShippingTierLineMeta(
   product: ShpProduct,
   meta: Record<string, unknown> | undefined,
@@ -50,11 +83,7 @@ export async function resolveShippingTierLineMeta(
   if (!delivery || delivery.tiers.length === 0) return NOOP
 
   const settings = await getSettingsCached()
-  const requested = meta && typeof meta.shippingTier === 'string' ? meta.shippingTier : undefined
-  const chosenKey =
-    (requested && findTierOption(delivery, requested) && requested) ||
-    (settings.defaultTierKey && findTierOption(delivery, settings.defaultTierKey) && settings.defaultTierKey) ||
-    delivery.tiers[0]!.key
+  const chosenKey = chosenTierKey(delivery, meta, settings.defaultTierKey)
   const tierOption = findTierOption(delivery, chosenKey)
   if (!tierOption) return NOOP
 
@@ -95,18 +124,25 @@ export async function resolveShippingTierLineMeta(
         stock: delivery.stock,
       })
       const byLabel = tEst.available && tEst.targetDate ? formatDeliveryByLabel(tEst.targetDate, todayStr) : null
+      const dateLabel = tEst.available && tEst.targetDate ? formatDeliveryDate(tEst.targetDate) : null
       const eff = effectiveTierPrice(t, delivery.perPersonCount)
       return {
         value: t.key,
         label: tierOptionLabel(t.label, eff, currencySymbol, byLabel),
         priceAdjust: eff ?? 0,
         description: t.description ?? undefined,
+        // The same wording pre-split for the summary presentation. A shop too
+        // old to read it ignores the field and renders from `label` as before.
+        summary: tierOptionSummary(t.label, eff, currencySymbol, byLabel, dateLabel),
       }
     }),
-    // Shop renders a dropdown by default; the shop owner can switch the cart to a
-    // radio group in Delivery settings. 'radios' is only honoured by a shop new
-    // enough to read it - an older shop just shows the dropdown either way.
-    renderAs: settings.cartControlStyle === 'radios' ? ('radios' as const) : ('select' as const),
+    // The shop owner picks the basket's picker in Delivery settings: the chosen
+    // service confirmed in place with the rest as chips (the default), a plain
+    // dropdown, or a radio list. Each is only honoured by a shop new enough to
+    // read it - an older shop falls back to the dropdown either way.
+    renderAs: settings.cartControlStyle === 'radios'
+      ? ('radios' as const)
+      : settings.cartControlStyle === 'dropdown' ? ('select' as const) : ('summary' as const),
   }
 
   // A per-person service on a line whose count could not be read cannot be

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/line-resolver'
+import { effectiveTierPrice, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/line-resolver'
 import type { ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 
 function opt(price: string, perPerson: boolean): ResolvedTierOption {
@@ -32,5 +32,30 @@ describe('effectiveTierPrice', () => {
 
   it('cannot price a per-person service with no readable count (blocks the line)', () => {
     expect(effectiveTierPrice(opt('50.00', true), null)).toBeNull()
+  })
+})
+
+// The basket's summary presentation displays these strings verbatim - it never
+// parses a label - so the split is the contract between the two modules.
+describe('tierOptionSummary', () => {
+  it('leads on the date and drops the service to a qualifier', () => {
+    expect(tierOptionSummary('Flat-pack', 0, '£', 'Friday', 'Fri 8 Aug')).toEqual({
+      headline: 'Arrives by Fri 8 Aug',
+      secondary: 'Flat-pack',
+      switchLabel: 'Flat-pack by Friday',
+      priceLabel: 'Free',
+    })
+  })
+
+  it('states a paid service as an addition', () => {
+    expect(tierOptionSummary('Installed', 25.95, '£', 'Thu 13th', 'Thu 13 Aug').priceLabel).toBe('+£25.95')
+  })
+
+  it('falls back to the service name when there is no date to promise', () => {
+    const s = tierOptionSummary('Installed', null, '£', null, null)
+    expect(s.headline).toBe('Installed')
+    expect(s.secondary).toBeUndefined()
+    expect(s.switchLabel).toBe('Installed')
+    expect(s.priceLabel).toBe('Per person')
   })
 })

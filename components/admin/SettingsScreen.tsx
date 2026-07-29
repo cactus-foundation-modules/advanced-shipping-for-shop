@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { isCartControlStyle, type CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 type Options = {
   attributes: { id: string; name: string }[]
@@ -10,7 +11,7 @@ type Settings = {
   rangeAttributeId: string | null
   holidayRegion: string
   defaultTierKey: string | null
-  cartControlStyle: 'dropdown' | 'radios'
+  cartControlStyle: CartControlStyle
   perPersonAttributeId: string | null
   cutoffTime: string
   dispatchLeadDays: number
@@ -258,15 +259,17 @@ export function SettingsScreen() {
               id="ash-control-style"
               className="form-control"
               value={settings.cartControlStyle}
-              onChange={(e) => setSettings({ ...settings, cartControlStyle: e.target.value === 'radios' ? 'radios' : 'dropdown' })}
+              onChange={(e) => setSettings({ ...settings, cartControlStyle: isCartControlStyle(e.target.value) ? e.target.value : 'summary' })}
             >
+              <option value="summary">Chosen service, with the rest as chips</option>
               <option value="dropdown">Dropdown</option>
               <option value="radios">Radio buttons</option>
             </select>
           </div>
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
-            How the delivery-service picker appears on each basket line. A dropdown stays compact;
-            radio buttons show every service at once.
+            How the delivery-service picker appears on each basket line. The first option confirms the
+            chosen service and its date in place, with every other service beside it as a one-click chip.
+            A dropdown stays compact; radio buttons list every service.
           </p>
         </section>
 

@@ -20,10 +20,14 @@ export function isHolidayRegion(value: string): value is HolidayRegion {
 
 // How the cart's per-line delivery-service picker is shown to the shopper: a
 // compact dropdown (default) or a radio group with every service visible at once.
-export type CartControlStyle = 'dropdown' | 'radios'
+// How the basket shows a line's delivery services. 'summary' is the default:
+// the chosen service is confirmed in place with its date and price, and every
+// other service sits beside it as a one-click chip. 'dropdown' and 'radios'
+// remain for a shop owner who prefers the plainer pickers.
+export type CartControlStyle = 'summary' | 'dropdown' | 'radios'
 
 export function isCartControlStyle(value: string): value is CartControlStyle {
-  return value === 'dropdown' || value === 'radios'
+  return value === 'summary' || value === 'dropdown' || value === 'radios'
 }
 
 // The shop-wide dispatch timing: what has to happen before any courier gets the
