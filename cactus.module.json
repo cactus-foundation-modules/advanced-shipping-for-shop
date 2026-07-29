@@ -1,11 +1,11 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
   "requiresModules": [
-    { "name": "shop", "minVersion": "0.1.135" },
+    { "name": "shop", "minVersion": "0.1.136" },
     { "name": "product-attributes-for-shop", "minVersion": "0.1.27" }
   ],
   "requiredEnvVars": [],
@@ -75,6 +75,22 @@
       "component": "shopDeliveryCartSummaryPuckComponent",
       "rscComponent": "shopDeliveryCartSummaryPuckRscComponent",
       "rscImport": "./components/puck/ShopDeliveryCartSummary.rsc",
+      "layoutTypes": ["shopCart"]
+    },
+    {
+      "type": "ShopDeliveryBasketOffers",
+      "import": "./components/puck/ShopDeliveryBasketOffers",
+      "component": "shopDeliveryBasketOffersPuckComponent",
+      "rscComponent": "shopDeliveryBasketOffersPuckRscComponent",
+      "rscImport": "./components/puck/ShopDeliveryBasketOffers.rsc",
+      "layoutTypes": ["shopCart"]
+    },
+    {
+      "type": "ShopDeliveryArrivals",
+      "import": "./components/puck/ShopDeliveryArrivals",
+      "component": "shopDeliveryArrivalsPuckComponent",
+      "rscComponent": "shopDeliveryArrivalsPuckRscComponent",
+      "rscImport": "./components/puck/ShopDeliveryArrivals.rsc",
       "layoutTypes": ["shopCart"]
     }
   ],

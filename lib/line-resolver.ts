@@ -168,7 +168,13 @@ export async function resolveShippingTierLineMeta(
   const tierText = `${tierOption.label}${perPersonNote}`
   const fields = [{ label: 'Delivery', value: dateLabel ? `${tierText} - by ${dateLabel}` : tierText }]
 
-  return { valid: true, priceAdjust, persistMeta: { fields }, control }
+  // Tell the basket how much of this line's price is the delivery service, so it
+  // can show it on a line of its own under the goods rather than burying a £66
+  // installation fee inside a chair's price. It is an attribution, not an extra
+  // charge - the money is already in priceAdjust above.
+  const charges = priceAdjust > 0 ? [{ label: 'Delivery', amount: priceAdjust }] : null
+
+  return { valid: true, priceAdjust, persistMeta: { fields }, control, charges }
 }
 
 // shop.cart-line-resolver-prefetch: resolve every cart product's delivery in one

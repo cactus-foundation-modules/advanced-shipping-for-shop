@@ -8,9 +8,9 @@
 
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export function isValidDate(value: string): boolean {
   return DATE_RE.test(value)
@@ -122,12 +122,16 @@ export function addWorkingDays(dateStr: string, n: number, holidays: Set<string>
   return cursor
 }
 
-// "Tue 29 Jul" - the storefront delivery-line format. Built from the calendar
-// date's own parts (no timezone), so it reads the same wherever it renders.
+// "Friday 7th of August" - the storefront delivery-line format, spelled out in
+// full. Built from the calendar date's own parts (no timezone), so it reads the
+// same wherever it renders. This is the "arrives by" date: it is the one a
+// shopper reads as a promise, so it says the whole thing rather than an
+// abbreviation they have to decode. The deliberately-short `formatDeliveryByLabel`
+// below is the one for tight spaces (switch chips, the sticky bar).
 export function formatDeliveryDate(dateStr: string): string {
   const [y, m, d] = ymd(dateStr)
-  const weekday = WEEKDAY_LABELS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]
-  return `${weekday} ${d} ${MONTH_LABELS[m - 1]}`
+  const weekday = WEEKDAY_FULL[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]
+  return `${weekday} ${ordinal(d)} of ${MONTH_FULL[m - 1]}`
 }
 
 // "10th", "1st", "22nd" - ordinal day of month for the option-label date.

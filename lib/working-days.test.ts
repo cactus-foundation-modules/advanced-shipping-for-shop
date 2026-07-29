@@ -92,8 +92,18 @@ describe('todayInZone', () => {
 })
 
 describe('formatDeliveryDate', () => {
-  it('formats as "Wed 29 Jul"', () => {
-    expect(formatDeliveryDate('2026-07-29')).toBe('Wed 29 Jul')
-    expect(formatDeliveryDate('2026-08-01')).toBe('Sat 1 Aug')
+  it('spells the date out in full', () => {
+    expect(formatDeliveryDate('2026-07-29')).toBe('Wednesday 29th of July')
+    expect(formatDeliveryDate('2026-08-01')).toBe('Saturday 1st of August')
+  })
+
+  it('gets the awkward ordinals right', () => {
+    expect(formatDeliveryDate('2026-08-02')).toBe('Sunday 2nd of August')
+    expect(formatDeliveryDate('2026-08-03')).toBe('Monday 3rd of August')
+    // 11th/12th/13th are "th", not "st"/"nd"/"rd".
+    expect(formatDeliveryDate('2026-08-11')).toBe('Tuesday 11th of August')
+    expect(formatDeliveryDate('2026-08-12')).toBe('Wednesday 12th of August')
+    expect(formatDeliveryDate('2026-08-13')).toBe('Thursday 13th of August')
+    expect(formatDeliveryDate('2026-08-21')).toBe('Friday 21st of August')
   })
 })
