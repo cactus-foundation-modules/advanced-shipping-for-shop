@@ -43,6 +43,32 @@ export async function getVariantParents(productIds: string[]): Promise<Map<strin
   return result
 }
 
+// parent product id -> its enabled variation children, for the storefront's
+// product-page picker. A listing page knows only the parent, and on a catalogue
+// where the range lives on the variations the parent resolves to no services at
+// all - so the page would show nothing until the shopper picked a combination.
+// The children are what actually carry the delivery facts, so the picker asks
+// for them and shows what they agree on until the shopper settles on one.
+// Disabled variants are left out: they are not on sale, so their services are
+// not the shop's promise.
+export async function getVariantChildIds(parentProductIds: string[]): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>()
+  if (parentProductIds.length === 0) return result
+  if (!(await hasVariantsTable())) return result
+  const rows = await prisma.$queryRaw<{ product_id: string; child_product_id: string }[]>`
+    SELECT "product_id", "child_product_id"
+    FROM "svr_variants"
+    WHERE "product_id" IN (${Prisma.join(parentProductIds)})
+      AND "enabled" = true
+  `
+  for (const r of rows) {
+    const list = result.get(r.product_id) ?? []
+    list.push(r.child_product_id)
+    result.set(r.product_id, list)
+  }
+  return result
+}
+
 // The provider id product-attributes-for-shop registers against
 // shop-variations' `option-source` point (see that module's cactus.module.json).
 // A variation option built from an attribute records this as its

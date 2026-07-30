@@ -60,6 +60,20 @@ function storeTier(slug: string, key: string): void {
 
 type EstimateResponse = { items: ItemEstimate[]; controlStyle?: CartControlStyle }
 
+// shop-variations' page-wide announcement of the variation in hand. Read as a
+// plain browser event with no import, because '@/modules/shop-variations/...'
+// does not exist on an install without that module and a static import would
+// break the build there (the same rule the delivery module's variations bridge
+// follows on the server). A catalogue with no variations simply never fires it.
+const VARIANT_SELECTION_EVENT = 'cactus-shop-variant-selection'
+type VariantSelectionDetail = { slug: string; parentProductId: string | null; productId: string | null; allOptionsChosen: boolean }
+
+function currentVariantSelection(): VariantSelectionDetail | null {
+  if (typeof window === 'undefined') return null
+  const snapshot = (window as unknown as { __cactusVariantSelection?: VariantSelectionDetail }).__cactusVariantSelection
+  return snapshot ?? null
+}
+
 export function DeliveryServicePicker({
   heading, slug: slugProp, preview,
 }: { heading?: string; slug?: string; preview?: boolean }) {
@@ -77,16 +91,27 @@ export function DeliveryServicePicker({
   // change event fires BEFORE the add event, so refreshing there would erase the
   // very difference this is here to spot.
   const knownKeys = useRef<Set<string>>(new Set())
+  // The variation the shopper has settled on, or null while the combination is
+  // incomplete (or there are no variations at all). Null asks about the listing
+  // with the variant fallback on; a value asks about that exact variation.
+  const [variantId, setVariantId] = useState<string | null>(null)
 
   const slug = slugProp ?? (typeof window === 'undefined' ? null : slugFromLocation())
 
-  const load = useCallback(async (tierKey: string | null) => {
+  const load = useCallback(async (tierKey: string | null, variantProductId: string | null) => {
     if (!slug) return
     try {
       const res = await fetch('/api/m/advanced-shipping-for-shop/estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [{ slug, tierKey: tierKey ?? undefined }] }),
+        body: JSON.stringify({
+          items: [variantProductId
+            ? { productId: variantProductId, tierKey: tierKey ?? undefined }
+            // Nothing settled yet: ask about the listing, and let the server
+            // answer from its variations where the listing itself carries no
+            // services (a catalogue that keys delivery off the variations).
+            : { slug, tierKey: tierKey ?? undefined, variantFallback: true }],
+        }),
       })
       if (!res.ok) return
       const data = (await res.json()) as EstimateResponse
@@ -102,12 +127,27 @@ export function DeliveryServicePicker({
     }
   }, [slug])
 
+  // Follow the shopper's variation. A listing's own services are a preview of
+  // what every variation agrees on; the moment one is settled, the picker asks
+  // again for that exact variation and shows its real services and dates.
+  useEffect(() => {
+    if (preview) return
+    const apply = (detail: VariantSelectionDetail | null) => {
+      if (detail && slug && detail.slug && detail.slug !== slug) return
+      setVariantId(detail?.productId ?? null)
+    }
+    apply(currentVariantSelection())
+    const onSelection = (e: Event) => apply((e as CustomEvent<VariantSelectionDetail>).detail)
+    window.addEventListener(VARIANT_SELECTION_EVENT, onSelection)
+    return () => window.removeEventListener(VARIANT_SELECTION_EVENT, onSelection)
+  }, [preview, slug])
+
   useEffect(() => {
     if (preview || !slug) return
     knownKeys.current = new Set(getCart().map(cartLineKey))
     // eslint-disable-next-line react-hooks/set-state-in-effect -- delegating to an async loader; setState runs after the estimate fetch resolves
-    void load(readStoredTier(slug))
-  }, [preview, slug, load])
+    void load(readStoredTier(slug), variantId)
+  }, [preview, slug, variantId, load])
 
   useEffect(() => {
     if (preview) return

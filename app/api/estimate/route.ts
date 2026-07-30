@@ -21,6 +21,9 @@ const Body = z.object({
         // The caller's own handle on the row, echoed back untouched - a basket
         // sends its cart-line key so it can match the answer to the right line.
         ref: z.string().min(1).max(200).optional(),
+        // Answer from the product's variations when it offers nothing itself -
+        // what a listing page needs before a combination has been chosen.
+        variantFallback: z.boolean().optional(),
       }),
     )
     .min(1)
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
   for (const item of parsed.data.items) {
     const productId = item.productId ?? (item.slug ? idBySlug.get(item.slug) : undefined)
     if (!productId) continue
-    inputs.push({ productId, tierKey: item.tierKey, quantity: item.quantity, ref: item.ref })
+    inputs.push({ productId, tierKey: item.tierKey, quantity: item.quantity, ref: item.ref, variantFallback: item.variantFallback })
   }
 
   if (inputs.length === 0) return NextResponse.json({ items: [], deliveries: [] })

@@ -8,17 +8,23 @@ import { prisma } from '@/lib/db/prisma'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { resolveProductDeliveries, findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { resolveProductDeliveries, findTierOption, type ProductDelivery, type ResolveContext } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
-import type { CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { getVariantChildIds } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
+import type { AshSettings, CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 
 // `ref` is the caller's own handle on the item, echoed back untouched. The
 // basket needs it: two lines of the same product on different services are one
 // productId but two rows, and an answer keyed only by product could not tell
 // them apart to write a choice back to the right one.
-export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string }
+// `variantFallback` asks: if this product offers nothing itself, answer from its
+// variations instead (see mergeVariantDeliveries below). The product page's
+// picker sets it, because a listing on a catalogue that keys delivery off the
+// variations resolves to nothing until a combination is chosen. The cart never
+// sets it - its lines are already the variations themselves.
+export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean }
 
 export type TierOption = {
   key: string
@@ -118,6 +124,66 @@ function chooseTier(delivery: ProductDelivery, requestedKey: string | undefined,
   return delivery.tiers[0]?.key ?? null
 }
 
+// What a listing page can promise before the shopper has picked a variation:
+// the services EVERY variation of it offers, each one costed and dated at its
+// worst across them. Only what they all agree on is shown, and never in the
+// best light, so nothing on offer here can be withdrawn or dearer once a
+// combination is settled - at which point the picker asks again for that exact
+// variation and this preview is replaced by the real answer.
+//
+// Null when the variations agree on nothing (or there are none), which leaves
+// the listing with no estimate, exactly as before.
+function mergeVariantDeliveries(parentProductId: string, children: ProductDelivery[], ctx: ResolveContext, timing: AshSettings): ProductDelivery | null {
+  if (children.length === 0) return null
+
+  // Offered by all of them, in the first child's order.
+  const shared = children[0]!.tiers
+    .map((t) => t.key)
+    .filter((key) => children.every((c) => c.tiers.some((t) => t.key === key)))
+  if (shared.length === 0) return null
+
+  const dateFor = (delivery: ProductDelivery, key: string): string => {
+    const tier = delivery.tiers.find((t) => t.key === key)
+    if (!tier) return LATEST_DATE
+    const est = computeEstimate({
+      now: ctx.now, timezone: ctx.timezone, holidays: ctx.holidays, timing, tier: tier.modifiers, stock: delivery.stock,
+    })
+    // A variation that cannot promise a date at all is the worst case there is.
+    return est.available && est.targetDate ? est.targetDate : LATEST_DATE
+  }
+
+  // One variation stands in for the lot: the slowest of them across the shared
+  // services. Its timing and its stock decide the dates shown, so the preview
+  // reads as the latest any variation would land rather than the earliest.
+  let representative = children[0]!
+  let worstSoFar = ''
+  for (const child of children) {
+    const worst = shared.map((key) => dateFor(child, key)).reduce((a, b) => (a > b ? a : b), '')
+    if (worst > worstSoFar) { worstSoFar = worst; representative = child }
+  }
+
+  const tiers = shared.map((key) => {
+    const base = representative.tiers.find((t) => t.key === key)!
+    // Dearest across the variations, so a preview never undercuts the price the
+    // chosen variation will actually charge.
+    const price = children
+      .map((c) => Number(c.tiers.find((t) => t.key === key)?.price ?? 0) || 0)
+      .reduce((a, b) => Math.max(a, b), 0)
+    return {
+      ...base,
+      price: price.toFixed(2),
+      // Priced per person if ANY variation prices it that way - the shopper is
+      // told so rather than shown a flat figure that may not apply.
+      perPerson: children.some((c) => c.tiers.find((t) => t.key === key)?.perPerson ?? false),
+    }
+  })
+
+  return { productId: parentProductId, stock: representative.stock, tiers, perPersonCount: representative.perPersonCount }
+}
+
+// Sorts after every real ISO date, so "no date at all" wins a worst-case pick.
+const LATEST_DATE = '9999-12-31'
+
 export async function estimateItems(inputs: EstimateItemInput[], now: Date = new Date()): Promise<EstimateResult> {
   const productIds = inputs.map((i) => i.productId)
   const ctx = await getResolveContext(now)
@@ -127,6 +193,24 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     getProductNames(productIds),
     resolveTaxDisplay(),
   ])
+
+  // Listing pages that resolved to nothing, where the caller asked us to look at
+  // the variations instead (the product page's own picker does; the cart never
+  // does - it holds real variation lines already). One extra pair of queries,
+  // and only when a page would otherwise have shown nothing at all.
+  const needFallback = inputs.filter((i) => i.variantFallback && !deliveries.get(i.productId)).map((i) => i.productId)
+  if (needFallback.length > 0) {
+    const childIds = await getVariantChildIds(needFallback)
+    const allChildren = [...childIds.values()].flat()
+    if (allChildren.length > 0) {
+      const childDeliveries = await resolveProductDeliveries(allChildren, ctx)
+      for (const [parentId, ids] of childIds) {
+        const resolved = ids.map((id) => childDeliveries.get(id)).filter((d): d is ProductDelivery => !!d)
+        const merged = mergeVariantDeliveries(parentId, resolved, ctx, settings)
+        if (merged) deliveries.set(parentId, merged)
+      }
+    }
+  }
 
   // "Today" in the shop's own timezone, for the relative wording on each
   // service's date ("Friday" rather than "Fri 8 Aug"). One value for the whole

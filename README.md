@@ -67,6 +67,18 @@ Two blocks, both droppable on a Product Detail layout:
   module's data, so the two surfaces cannot drift apart, and it follows the
   basket picker style set in Delivery settings.
 
+On a product with variations the picker follows the shopper's combination. Until
+one is settled it shows only the services EVERY variation of that product
+offers, each costed and dated at its worst across them, so nothing shown can be
+withdrawn or dearer once they choose; as soon as a full combination is picked it
+re-asks for that exact variation. That matters on a catalogue where the delivery
+scope (the range attribute) is set on the variations rather than the listing -
+the listing itself resolves to no services at all, so without this the block
+would never appear. shop-variations announces the selection as a plain browser
+event (`cactus-shop-variant-selection`, latest detail on
+`window.__cactusVariantSelection`); this module listens for it without importing
+anything, so an install without variations is unaffected.
+
 A choice made on the product page is remembered for that product for the rest of
 the browsing session, applied straight away to that product's basket line if it
 is already in the basket, and otherwise carried onto the line the next
