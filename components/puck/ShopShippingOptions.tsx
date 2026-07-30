@@ -15,6 +15,9 @@ export const shopShippingOptionsPuckComponent = {
   fields: {
     heading: { type: 'text' as const, label: 'Heading (leave empty for none)' },
   },
-  defaultProps: { heading: 'Shipping options' } as ShopShippingOptionsProps,
+  // No heading by default. The options state their own outcome ("Flat-Pack by
+  // Friday, free"), exactly as they do in the basket, where they sit bare - a
+  // label over the top only repeats what the shopper is already reading.
+  defaultProps: { heading: '' } as ShopShippingOptionsProps,
   render: ShopShippingOptions,
 }

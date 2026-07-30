@@ -65,7 +65,9 @@ Two blocks, both droppable on a Product Detail layout:
   basket shows it: every service the product is offered, what each one adds and
   when each one lands. It is shop's own picker component rendered from this
   module's data, so the two surfaces cannot drift apart, and it follows the
-  basket picker style set in Delivery settings.
+  basket picker style set in Delivery settings. It carries no heading by
+  default, since each option already states its own outcome - set one on the
+  block if the page wants it.
 
 On a product with variations the picker follows the shopper's combination. Until
 one is settled it shows only the services EVERY variation of that product
