@@ -10,49 +10,20 @@ import { getShopConfigCached } from '@/modules/shop/lib/config'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { findTierOption, type ProductDelivery, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { effectiveTierPrice, tierOptionLabel, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
-// The amount a service adds to a line: its base price, or base × person count
-// when it is priced per person. Returns null for a per-person service on a line
-// with no readable count - it cannot be priced, so the line is blocked rather
-// than guessed. Rounded to the penny so the optimistic client figure matches.
-export function effectiveTierPrice(t: ResolvedTierOption, count: number | null): number | null {
-  const base = Number(t.price) || 0
-  if (!t.perPerson) return base
-  if (count == null) return null
-  return Math.round(base * count * 100) / 100
-}
-
-function tierOptionLabel(label: string, price: number | null, symbol: string, byLabel: string | null): string {
-  const base = byLabel ? `${label} by ${byLabel}` : label
-  // A per-person service on a line whose count could not be read has no price to
-  // show; the shopper is told it is priced per person and the line blocks on
-  // selection until a person count is set.
-  if (price == null) return `${base} (price per person)`
-  if (price <= 0) return `${base} (included)`
-  return `${base} (+${symbol}${price.toFixed(2)})`
-}
-
-// The same option, broken into the parts the basket's summary presentation lays
-// out - so the basket never has to pick a label apart to find the date, the
-// service or the price. `headline` is what the line reads once this service is
-// the chosen one, `switchLabel` is the compact wording on the chip that swaps to
-// it, and `priceLabel` is the price on its own.
-export function tierOptionSummary(
-  label: string, price: number | null, symbol: string, byLabel: string | null, dateLabel: string | null,
-) {
-  return {
-    headline: dateLabel ? `Arrives by ${dateLabel}` : label,
-    secondary: dateLabel ? label : undefined,
-    switchLabel: byLabel ? `${label} by ${byLabel}` : label,
-    priceLabel: price == null ? 'Per person' : price <= 0 ? 'Free' : `+${symbol}${price.toFixed(2)}`,
-  }
-}
+// The wording and the per-person arithmetic live in lib/tier-labels.ts, which is
+// pure and so can be read by the storefront's client islands too (the product
+// page's own service picker shows the same options this resolver offers the
+// basket). Re-exported here because this file was their first home and the rest
+// of the module still asks for them by this path.
+export { effectiveTierPrice, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 
 // Which service a line is on: the shopper's own choice when they have made one
 // and it is still offered, else the shop's default service, else the first one

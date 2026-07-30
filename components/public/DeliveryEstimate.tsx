@@ -7,6 +7,7 @@
 // cut-off passes it re-fetches, and the server rolls the date to the next day.
 import { useEffect, useMemo, useState } from 'react'
 import { formatCountdown } from '@/modules/advanced-shipping-for-shop/lib/countdown'
+import { slugFromLocation } from '@/modules/advanced-shipping-for-shop/lib/product-slug'
 
 type ItemEstimate = {
   hasEstimate: boolean
@@ -21,14 +22,6 @@ type ItemEstimate = {
 const css = `.ash-delivery{margin-top:14px;background:var(--color-bg-subtle);border:1px solid var(--color-border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--color-fg)}
 .ash-delivery-date{font-weight:600}
 .ash-delivery-note{display:block;margin:2px 0 0;font-size:12.5px;color:var(--color-text-muted)}`
-
-function slugFromLocation(): string | null {
-  if (typeof window === 'undefined') return null
-  const parts = window.location.pathname.split('/').filter(Boolean)
-  const idx = parts.indexOf('products')
-  const slug = idx >= 0 ? parts[idx + 1] : parts[parts.length - 1]
-  return slug || null
-}
 
 export function DeliveryEstimate({ slug: slugProp, preview }: { slug?: string; preview?: boolean }) {
   const [estimate, setEstimate] = useState<ItemEstimate | null>(preview ? PREVIEW : null)

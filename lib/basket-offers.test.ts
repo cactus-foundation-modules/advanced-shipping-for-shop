@@ -27,6 +27,7 @@ function item(ref: string, chosen: string, tiers: TierSpec[], overrides: Partial
       priceEffective: t.price,
       targetDate: t.date,
       targetLabel: t.date,
+      targetByLabel: t.date,
     })),
     ...overrides,
   }

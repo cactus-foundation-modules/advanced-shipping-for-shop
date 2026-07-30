@@ -12,8 +12,10 @@ counting **working days only**: weekends and UK bank holidays are skipped.
 
 - **Table prefix:** `ash_`
 - **Depends on:**
-  - `shop` (`>= 0.1.119`) - exposes the cart-line-resolver seam and the generic
-    cart-line control this module uses for the basket picker.
+  - `shop` (`>= 0.1.142`) - exposes the cart-line-resolver seam, the generic
+    cart-line control this module uses for the basket picker, the shared picker
+    component the product page's own block borrows, and the add-to-cart
+    subscription that carries a product-page choice onto the new basket line.
   - `product-attributes-for-shop` (`>= 0.1.27`) - supplies the structured "range"
     attribute prices and timings key on.
 
@@ -52,6 +54,26 @@ A **Delivery** section in the admin sidebar:
   attribute means "range", per-person pricing, the bank-holiday region
   (England & Wales / Scotland / Northern Ireland), the default service and the
   basket picker style.
+
+## The product page
+
+Two blocks, both droppable on a Product Detail layout:
+
+- **Product: Delivery estimate** - the "Delivery by Tue 29 Jul" line with its
+  countdown.
+- **Product: Shipping options** - the delivery-service picker, exactly as the
+  basket shows it: every service the product is offered, what each one adds and
+  when each one lands. It is shop's own picker component rendered from this
+  module's data, so the two surfaces cannot drift apart, and it follows the
+  basket picker style set in Delivery settings.
+
+A choice made on the product page is remembered for that product for the rest of
+the browsing session, applied straight away to that product's basket line if it
+is already in the basket, and otherwise carried onto the line the next
+add-to-cart creates. Nothing is priced in the browser: the basket re-prices the
+chosen service server-side exactly as it does for a choice made in the basket,
+and a service the added item is not actually offered falls back to the shop's
+default rather than being honoured.
 
 ## The basket
 

@@ -5,12 +5,13 @@
 // consistent.
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { formatDeliveryDate } from '@/modules/advanced-shipping-for-shop/lib/working-days'
-import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/line-resolver'
+import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
+import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { resolveProductDeliveries, findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import type { CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 
 // `ref` is the caller's own handle on the item, echoed back untouched. The
@@ -33,6 +34,11 @@ export type TierOption = {
   // round-trip. Null when this service cannot promise a date on this line.
   targetDate: string | null
   targetLabel: string | null
+  // The same date said the way a picker says it ("Friday", "Thu 13th") rather
+  // than as a plain date. The basket's own picker is worded from this by the
+  // cart-line resolver; the product page's picker has only this API to read, so
+  // it rides along here and the two cannot end up saying different things.
+  targetByLabel: string | null
 }
 
 export type ItemEstimate = {
@@ -65,7 +71,14 @@ export type GroupedDelivery = {
   tierLabels: string[]
 }
 
-export type EstimateResult = { items: ItemEstimate[]; deliveries: GroupedDelivery[] }
+export type EstimateResult = {
+  items: ItemEstimate[]
+  deliveries: GroupedDelivery[]
+  // Which picker the shop owner chose in Delivery settings, so a storefront
+  // island can render the services the way the basket does without a settings
+  // read of its own. Presentation only - nothing is priced from it.
+  controlStyle: CartControlStyle
+}
 
 const EMPTY_ITEM = (productId: string, ref: string | null, name: string | null): ItemEstimate => ({
   productId,
@@ -115,6 +128,10 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     resolveTaxDisplay(),
   ])
 
+  // "Today" in the shop's own timezone, for the relative wording on each
+  // service's date ("Friday" rather than "Fri 8 Aug"). One value for the whole
+  // batch - every date in it is worked out against the same day.
+  const todayStr = todayInZone(ctx.now, ctx.timezone)
   const items: ItemEstimate[] = []
   // Per arrival date: how many units land then, which products they are, and on
   // which services. Sets, so three of the same chair reads as one product name.
@@ -183,6 +200,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           priceEffective: shown(effectiveTierPrice(t, delivery.perPersonCount)),
           targetDate: dated,
           targetLabel: dated ? formatDeliveryDate(dated) : null,
+          targetByLabel: dated ? formatDeliveryByLabel(dated, todayStr) : null,
         }
       }),
     })
@@ -206,5 +224,5 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
       tierLabels: [...bucket.tierLabels],
     }))
 
-  return { items, deliveries: deliveriesSummary }
+  return { items, deliveries: deliveriesSummary, controlStyle: settings.cartControlStyle }
 }
