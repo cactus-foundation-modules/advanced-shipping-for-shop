@@ -69,6 +69,60 @@ export async function getVariantChildIds(parentProductIds: string[]): Promise<Ma
   return result
 }
 
+// One option value a variation was built from. The option's own name and both
+// positions ride along so a caller can order and group these the way the product
+// page's own option controls do, without a second query.
+export type VariantOptionValue = {
+  optionId: string
+  optionName: string
+  optionPosition: number
+  valueId: string
+  valueLabel: string
+  valuePosition: number
+}
+
+// child product id -> the option values that variation is made of. Read straight
+// off shop-variations' tables rather than through an import, for the reason at
+// the top of this file. Empty when the module is absent, which leaves every
+// caller with nothing to say about where a service is to be had - and saying
+// nothing is exactly right on a shop with no variations.
+export async function getVariantOptionValues(childProductIds: string[]): Promise<Map<string, VariantOptionValue[]>> {
+  const result = new Map<string, VariantOptionValue[]>()
+  if (childProductIds.length === 0) return result
+  if (!(await hasVariantsTable())) return result
+  const rows = await prisma.$queryRaw<{
+    child_product_id: string
+    option_id: string
+    option_name: string
+    option_position: number
+    value_id: string
+    value_label: string
+    value_position: number
+  }[]>`
+    SELECT v."child_product_id", o."id" AS option_id, o."name" AS option_name, o."position" AS option_position,
+           ov."id" AS value_id, ov."label" AS value_label, ov."position" AS value_position
+    FROM "svr_variants" v
+    JOIN "svr_variant_values" vv ON vv."variant_id" = v."id"
+    JOIN "svr_option_values" ov ON ov."id" = vv."option_value_id"
+    JOIN "svr_options" o ON o."id" = ov."option_id"
+    WHERE v."child_product_id" IN (${Prisma.join(childProductIds)})
+    ORDER BY o."position", ov."position"
+  `
+  for (const r of rows) {
+    const list = result.get(r.child_product_id) ?? []
+    list.push({
+      optionId: r.option_id,
+      optionName: r.option_name,
+      optionPosition: Number(r.option_position),
+      valueId: r.value_id,
+      valueLabel: r.value_label,
+      valuePosition: Number(r.value_position),
+    })
+    result.set(r.child_product_id, list)
+  }
+  return result
+}
+
 // The provider id product-attributes-for-shop registers against
 // shop-variations' `option-source` point (see that module's cactus.module.json).
 // A variation option built from an attribute records this as its

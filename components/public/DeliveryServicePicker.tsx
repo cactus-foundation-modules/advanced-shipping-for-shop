@@ -35,7 +35,36 @@ import type { ItemEstimate } from '@/modules/advanced-shipping-for-shop/lib/esti
 import type { CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 
 const css = `.ash-svc{margin-top:14px}
-.ash-svc-h{margin:0 0 8px;font-size:0.9375rem;font-weight:600;color:var(--color-text)}`
+.ash-svc-h{margin:0 0 8px;font-size:0.9375rem;font-weight:600;color:var(--color-text)}
+/* The switch-to chips run 10% smaller here than in the basket. A cart line has a
+   column of its own to fill; on a product page the row sits under the buy panel
+   beside the price and the add button, where the basket's size reads loud. Every
+   number below is shop's own value times 0.9, scoped to this block so the cart
+   keeps its own. The coarse-pointer copy is repeated for the same reason it
+   exists in shop's sheet - a fingertip still needs the bigger target - shrunk by
+   the same tenth. */
+.ash-svc .scl-hints{gap:0.3375rem;margin-top:0.45rem}
+.ash-svc .scl-hints-t{font-size:0.7313rem}
+.ash-svc .scl-hint{font-size:0.7313rem;padding:0.225rem 0.5625rem}
+.ash-svc .scl-hint-fee{margin-left:0.3938rem}
+@media (pointer:coarse){
+  .ash-svc .scl-hint{padding:0.45rem 0.7875rem}
+}
+/* A service another variation of this listing carries but this one does not:
+   the same chip, struck through and dead, with a line under it saying which
+   choice does carry it. Dashed like an out-of-reach variation choice, and in the
+   same muted ink, so the two rows on a product page read as one language rather
+   than two. Not a <button> and not a radio - there is nothing here to pick. */
+.ash-svc-off{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0.3375rem;margin-top:0.45rem}
+.ash-svc-off .scl-hints-t{align-self:center}
+.ash-svc .ash-svc-offchip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;
+  white-space:normal;border-style:dashed;color:var(--color-text-muted);cursor:default;font-weight:500}
+/* The chip is inert, so it must not light up under the pointer the way a live
+   switch chip does. */
+.ash-svc .ash-svc-offchip:hover{border-color:var(--color-border);background:var(--color-surface)}
+.ash-svc-offchip .ash-svc-strike{text-decoration:line-through;font-weight:600}
+.ash-svc-offchip .scl-hint-fee{color:var(--color-text-muted)}
+.ash-svc-note{font-size:0.6875rem;font-weight:500;color:var(--color-text-muted)}`
 
 // Per-product, per-session: a pick survives a reload and a trip to another page
 // and back, but it is not a standing preference the shopper never agreed to.
@@ -106,11 +135,14 @@ export function DeliveryServicePicker({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: [variantProductId
-            ? { productId: variantProductId, tierKey: tierKey ?? undefined }
+            // Either way the answer covers the whole listing: what this product
+            // can have, and (as `otherTiers`) what the rest of its variations can
+            // that it cannot, so nothing the shop sells is quietly dropped.
+            ? { productId: variantProductId, tierKey: tierKey ?? undefined, variantAlternatives: true }
             // Nothing settled yet: ask about the listing, and let the server
             // answer from its variations where the listing itself carries no
             // services (a catalogue that keys delivery off the variations).
-            : { slug, tierKey: tierKey ?? undefined, variantFallback: true }],
+            : { slug, tierKey: tierKey ?? undefined, variantFallback: true, variantAlternatives: true }],
         }),
       })
       if (!res.ok) return
@@ -197,7 +229,12 @@ export function DeliveryServicePicker({
   const control = item
     ? buildProductTierControl(item, currencySymbol, style, preview ? null : chosen)
     : null
-  if (!control) return null
+  // Services the rest of the listing carries and this product does not. Shown
+  // even when there is no picker at all - a listing whose variations agree on no
+  // single service still has services to tell a shopper about, and an empty
+  // block would be the one answer that is plainly wrong.
+  const others = item?.otherTiers ?? []
+  if (!control && others.length === 0) return null
 
   return (
     <>
@@ -209,15 +246,42 @@ export function DeliveryServicePicker({
       <style>{css}</style>
       <div className="ash-svc">
         {heading ? <p className="ash-svc-h">{heading}</p> : null}
-        <CartLineControlView
-          control={control}
-          groupName={`ash-svc-${item?.productId ?? 'preview'}`}
-          preview={preview}
-          onChange={onChange}
-        />
+        {control && (
+          <CartLineControlView
+            control={control}
+            groupName={`ash-svc-${item?.productId ?? 'preview'}`}
+            preview={preview}
+            onChange={onChange}
+          />
+        )}
+        {others.length > 0 && (
+          <div className="ash-svc-off">
+            <span className="scl-hints-t">Not on this choice:</span>
+            {others.map((o) => (
+              // The whole sentence rides on `title` as well as being printed:
+              // the chip is narrow, the note wraps, and a shopper hovering the
+              // struck-out name should not have to read it twice to be sure.
+              <span key={o.key} className="scl-hint ash-svc-offchip" title={`${o.label} - ${o.note}`}>
+                <span>
+                  <span className="ash-svc-strike">{o.label}</span>
+                  <span className="scl-hint-fee">{priceLabel(o.priceEffective, currencySymbol)}</span>
+                </span>
+                <span className="ash-svc-note">{o.note}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </>
   )
+}
+
+// The price on a crossed-out service, worded exactly as the live chips word
+// theirs (see tier-labels' tierOptionSummary) - a shopper comparing the two rows
+// is comparing like with like.
+function priceLabel(price: number | null, symbol: string): string {
+  if (price == null) return 'Per person'
+  return price <= 0 ? 'Free' : `+${symbol}${price.toFixed(2)}`
 }
 
 // A product with three services, priced and dated, so the editor canvas shows
@@ -238,5 +302,10 @@ const PREVIEW_ITEM: ItemEstimate = {
     { key: 'standard', label: 'Standard delivery', description: null, price: '0.00', priceEffective: 0, targetDate: '2026-08-07', targetLabel: 'Fri 7 Aug', targetByLabel: 'Friday' },
     { key: 'express', label: 'Express delivery', description: null, price: '9.95', priceEffective: 9.95, targetDate: '2026-08-04', targetLabel: 'Tue 4 Aug', targetByLabel: 'Tuesday' },
     { key: 'installed', label: 'Delivered and installed', description: 'Built in the room of your choice, packaging taken away.', price: '66.00', priceEffective: 66, targetDate: '2026-08-14', targetLabel: 'Fri 14 Aug', targetByLabel: 'Fri 14th' },
+  ],
+  // One service the preview product's other variations carry and this one does
+  // not, so the editor canvas shows the crossed-out row at its real size too.
+  otherTiers: [
+    { key: 'two-man', label: 'Two-person delivery', description: null, priceEffective: 24, note: 'Available in 160 to 200cm' },
   ],
 }

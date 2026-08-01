@@ -24,6 +24,10 @@ const Body = z.object({
         // Answer from the product's variations when it offers nothing itself -
         // what a listing page needs before a combination has been chosen.
         variantFallback: z.boolean().optional(),
+        // Also report the services the OTHER variations of this listing offer,
+        // so a product page can cross them out and say where they are to be had
+        // rather than hiding them.
+        variantAlternatives: z.boolean().optional(),
       }),
     )
     .min(1)
@@ -53,7 +57,10 @@ export async function POST(request: NextRequest) {
   for (const item of parsed.data.items) {
     const productId = item.productId ?? (item.slug ? idBySlug.get(item.slug) : undefined)
     if (!productId) continue
-    inputs.push({ productId, tierKey: item.tierKey, quantity: item.quantity, ref: item.ref, variantFallback: item.variantFallback })
+    inputs.push({
+      productId, tierKey: item.tierKey, quantity: item.quantity, ref: item.ref,
+      variantFallback: item.variantFallback, variantAlternatives: item.variantAlternatives,
+    })
   }
 
   if (inputs.length === 0) return NextResponse.json({ items: [], deliveries: [] })

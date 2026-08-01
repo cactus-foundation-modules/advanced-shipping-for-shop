@@ -11,7 +11,8 @@ import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estima
 import { resolveProductDeliveries, findTierOption, type ProductDelivery, type ResolveContext } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
-import { getVariantChildIds } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
+import { getVariantChildIds, getVariantParents, getVariantOptionValues, type VariantOptionValue } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
+import { availableWithGroups, availableWithPhrase } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
 import type { AshSettings, CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 
@@ -24,7 +25,13 @@ import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-d
 // picker sets it, because a listing on a catalogue that keys delivery off the
 // variations resolves to nothing until a combination is chosen. The cart never
 // sets it - its lines are already the variations themselves.
-export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean }
+// `variantAlternatives` asks for the other half of the story: the services the
+// REST of this listing's variations offer but this product does not, so a
+// product page can cross them out and say which choice carries them instead of
+// silently hiding them. Set by the product page's picker, never by the cart -
+// a basket line is a thing the shopper has already chosen, not a choice still
+// being made.
+export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean; variantAlternatives?: boolean }
 
 export type TierOption = {
   key: string
@@ -47,6 +54,24 @@ export type TierOption = {
   targetByLabel: string | null
 }
 
+// A service this product cannot have, but another variation of the same listing
+// can. Deliberately NOT in `tiers`: everything that reads `tiers` treats it as
+// "what this line may be switched to", and a basket offering "everything sooner"
+// must never offer one of these. It carries no date for the same reason - there
+// is no honest date for a service that would need a different product.
+export type UnavailableTierOption = {
+  key: string
+  label: string
+  description: string | null
+  // Dearest across the variations that DO offer it, on the same "never in the
+  // best light" footing as the listing preview: a figure the shopper is shown
+  // before they can have the thing must not undercut what it will actually cost.
+  priceEffective: number | null
+  // "Available in 160 to 180cm" - which choice carries it, worded here so the
+  // product page and any other surface say it the same way.
+  note: string
+}
+
 export type ItemEstimate = {
   productId: string
   ref: string | null
@@ -65,6 +90,10 @@ export type ItemEstimate = {
   isPreOrder: boolean
   tierKey: string | null
   tiers: TierOption[]
+  // Only ever populated for a caller that asked (`variantAlternatives`), and only
+  // on a listing that has variations. Absent everywhere else, so no existing
+  // reader has to learn about it.
+  otherTiers?: UnavailableTierOption[]
 }
 
 // One arrival date the basket is waiting on, with the services and the items
@@ -198,18 +227,82 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   // the variations instead (the product page's own picker does; the cart never
   // does - it holds real variation lines already). One extra pair of queries,
   // and only when a page would otherwise have shown nothing at all.
-  const needFallback = inputs.filter((i) => i.variantFallback && !deliveries.get(i.productId)).map((i) => i.productId)
-  if (needFallback.length > 0) {
-    const childIds = await getVariantChildIds(needFallback)
-    const allChildren = [...childIds.values()].flat()
-    if (allChildren.length > 0) {
-      const childDeliveries = await resolveProductDeliveries(allChildren, ctx)
-      for (const [parentId, ids] of childIds) {
-        const resolved = ids.map((id) => childDeliveries.get(id)).filter((d): d is ProductDelivery => !!d)
-        const merged = mergeVariantDeliveries(parentId, resolved, ctx, settings)
-        if (merged) deliveries.set(parentId, merged)
+  // Which listings this batch needs the variations of, and why:
+  //  - `variantFallback`: a listing page that resolved to nothing itself, whose
+  //    variations are the only things carrying delivery facts (merged below);
+  //  - `variantAlternatives`: a product page that wants the services the rest of
+  //    the listing offers, whether or not this product resolved to anything. Here
+  //    the item may BE a variation, so the listing is found by going up first.
+  // Both are answered from one set of queries: the same children, resolved once.
+  const wantAlternatives = [...new Set(inputs.filter((i) => i.variantAlternatives).map((i) => i.productId))]
+  const parentOf = wantAlternatives.length > 0 ? await getVariantParents(wantAlternatives) : new Map<string, string>()
+  const listingOf = (productId: string) => parentOf.get(productId) ?? productId
+  const needChildren = new Set<string>([
+    ...inputs.filter((i) => i.variantFallback && !deliveries.get(i.productId)).map((i) => i.productId),
+    ...wantAlternatives.map(listingOf),
+  ])
+  const childIdsByListing = needChildren.size > 0 ? await getVariantChildIds([...needChildren]) : new Map<string, string[]>()
+  const allChildren = [...new Set([...childIdsByListing.values()].flat())]
+  const childDeliveries = allChildren.length > 0 ? await resolveProductDeliveries(allChildren, ctx) : new Map<string, ProductDelivery>()
+  // What each variation is made of, for the "available in 160 to 180cm" line.
+  // Only fetched for a caller that asked for the alternatives at all.
+  const childOptionValues = wantAlternatives.length > 0 && allChildren.length > 0
+    ? await getVariantOptionValues(allChildren)
+    : new Map<string, VariantOptionValue[]>()
+
+  for (const [listingId, ids] of childIdsByListing) {
+    if (!inputs.some((i) => i.variantFallback && i.productId === listingId) || deliveries.get(listingId)) continue
+    const resolved = ids.map((id) => childDeliveries.get(id)).filter((d): d is ProductDelivery => !!d)
+    const merged = mergeVariantDeliveries(listingId, resolved, ctx, settings)
+    if (merged) deliveries.set(listingId, merged)
+  }
+
+  // The services the rest of the listing offers that THIS product does not, each
+  // with the choice that carries it. Everything it needs is already in hand, so
+  // it costs no further queries.
+  function otherTiersFor(productId: string, own: ProductDelivery | undefined, shown: (p: number | null) => number | null): UnavailableTierOption[] {
+    const childIds = childIdsByListing.get(listingOf(productId)) ?? []
+    if (childIds.length === 0) return []
+    const ownKeys = new Set((own?.tiers ?? []).map((t) => t.key))
+    // Keys in the order the variations themselves list them, so the crossed-out
+    // services read down the page in the shop's own service order.
+    const seen = new Set<string>()
+    const extras: UnavailableTierOption[] = []
+    for (const childId of childIds) {
+      for (const tier of childDeliveries.get(childId)?.tiers ?? []) {
+        if (ownKeys.has(tier.key) || seen.has(tier.key)) continue
+        seen.add(tier.key)
+        const offering = childIds.filter((id) => childDeliveries.get(id)?.tiers.some((t) => t.key === tier.key))
+        // Dearest across the variations that carry it; a per-person service on a
+        // variation with no readable count prices to null and is left unpriced
+        // rather than guessed, exactly as it is in the picker itself.
+        let price: number | null = 0
+        for (const id of offering) {
+          const child = childDeliveries.get(id)
+          const match = child?.tiers.find((t) => t.key === tier.key)
+          if (!child || !match) continue
+          const effective = effectiveTierPrice(match, child.perPersonCount)
+          if (effective == null) { price = null; break }
+          price = Math.max(price ?? 0, effective)
+        }
+        const groups = availableWithGroups(
+          childOptionValues,
+          childIds,
+          offering,
+          // A product that is itself a variation is the shopper's current pick,
+          // so an option it already satisfies is not the one in the way.
+          parentOf.has(productId) ? productId : null,
+        )
+        extras.push({
+          key: tier.key,
+          label: tier.label,
+          description: tier.description,
+          priceEffective: shown(price),
+          note: availableWithPhrase(groups),
+        })
       }
     }
+    return extras
   }
 
   // "Today" in the shop's own timezone, for the relative wording on each
@@ -233,8 +326,13 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     const delivery = deliveries.get(input.productId)
     const tierKey = delivery ? chooseTier(delivery, input.tierKey, settings.defaultTierKey) : null
     const tierOption = delivery && tierKey ? findTierOption(delivery, tierKey) : null
+    // Worked out even for a product with no services of its own: a listing whose
+    // variations agree on nothing still has services to tell the shopper about,
+    // and "nothing at all" would be the one answer that is plainly wrong.
+    const otherTiers = input.variantAlternatives ? otherTiersFor(input.productId, delivery, shown) : undefined
     if (!delivery || !tierOption) {
-      items.push(EMPTY_ITEM(input.productId, ref, name))
+      const empty = EMPTY_ITEM(input.productId, ref, name)
+      items.push(otherTiers?.length ? { ...empty, otherTiers } : empty)
       continue
     }
 
@@ -287,6 +385,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           targetByLabel: dated ? formatDeliveryByLabel(dated, todayStr) : null,
         }
       }),
+      ...(otherTiers?.length ? { otherTiers } : null),
     })
 
     if (est.available && est.targetDate) {
