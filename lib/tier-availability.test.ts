@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { availableWithGroups, availableWithPhrase } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
+import { availableWithGroups, availableWithPhrase, childIdsInPlay } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
 import type { VariantOptionValue } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
 
 // A listing with two options - Width (four sizes) and Finish (two woods) - built
@@ -85,6 +85,36 @@ describe('availableWithGroups', () => {
 
   it('is silent on a shop with no variations rather than guessing', () => {
     expect(availableWithGroups(new Map(), [], []).groups).toEqual([])
+  })
+})
+
+describe('childIdsInPlay', () => {
+  // The defect: a service only some variations carry was crossed out on a page
+  // the shopper had not touched, before they had ruled anything out at all.
+  it('keeps every variation in play when nothing is picked', () => {
+    expect(childIdsInPlay(listing, ALL)).toEqual(ALL)
+    expect(childIdsInPlay(listing, ALL, [])).toEqual(ALL)
+  })
+
+  it('narrows to the variations matching a half-built combination', () => {
+    expect(childIdsInPlay(listing, ALL, ['w-160cm'])).toEqual(['160cm/Oak', '160cm/Walnut'])
+    expect(childIdsInPlay(listing, ALL, ['w-160cm', 'f-Walnut'])).toEqual(['160cm/Walnut'])
+  })
+
+  it('ignores a pick belonging to some other listing', () => {
+    expect(childIdsInPlay(listing, ALL, ['not-a-value-here'])).toEqual(ALL)
+  })
+
+  it('falls back to the whole listing when the picks match nothing', () => {
+    // A stale selection, or a listing rebuilt underneath it: better the full
+    // preview than a product page with no delivery on it at all. Both values are
+    // known to this listing here - they just never appear together.
+    const sparse = new Map([['a', child('120cm', 'Oak')], ['b', child('140cm', 'Walnut')]])
+    expect(childIdsInPlay(sparse, ['a', 'b'], ['w-120cm', 'f-Walnut'])).toEqual(['a', 'b'])
+  })
+
+  it('has nothing to narrow on a listing with no variations', () => {
+    expect(childIdsInPlay(new Map(), [], ['w-120cm'])).toEqual([])
   })
 })
 

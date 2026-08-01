@@ -8,36 +8,43 @@ import { prisma } from '@/lib/db/prisma'
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
-import { resolveProductDeliveries, findTierOption, type ProductDelivery, type ResolveContext } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { resolveProductDeliveries, findTierOption, type ProductDelivery, type ResolveContext, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 import { getVariantChildIds, getVariantParents, getVariantOptionValues, type VariantOptionValue } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
-import { availableWithGroups, availableWithPhrase } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
-import type { AshSettings, CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { availableWithGroups, availableWithPhrase, childIdsInPlay } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
+import type { AshSettings, CartControlStyle, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
 
 // `ref` is the caller's own handle on the item, echoed back untouched. The
 // basket needs it: two lines of the same product on different services are one
 // productId but two rows, and an answer keyed only by product could not tell
 // them apart to write a choice back to the right one.
-// `variantFallback` asks: if this product offers nothing itself, answer from its
-// variations instead (see mergeVariantDeliveries below). The product page's
-// picker sets it, because a listing on a catalogue that keys delivery off the
-// variations resolves to nothing until a combination is chosen. The cart never
+// `variantFallback` asks: answer this listing from its variations rather than
+// from its own product row (see mergeVariantDeliveries below). The product
+// page's picker sets it, because the listing is not the thing bought - the
+// basket takes the chosen variation's own product - so the variations are what
+// decides which services are really on offer, and on a catalogue that keys
+// delivery off them the listing row resolves to nothing at all. The cart never
 // sets it - its lines are already the variations themselves.
 // `variantAlternatives` asks for the other half of the story: the services the
-// REST of this listing's variations offer but this product does not, so a
-// product page can cross them out and say which choice carries them instead of
-// silently hiding them. Set by the product page's picker, never by the cart -
-// a basket line is a thing the shopper has already chosen, not a choice still
-// being made.
+// variations RULED OUT by what the shopper has settled on offer but this answer
+// does not, so a product page can cross those out and say which choice carries
+// them instead of silently hiding them. Set by the product page's picker, never
+// by the cart - a basket line is a thing the shopper has already chosen, not a
+// choice still being made.
 // `chosenValueIds` are the variation options the shopper has picked so far
 // (shop-variations' own option-value ids, straight off its page-wide selection
-// broadcast). They only affect the WORDING of the crossed-out services: where a
-// service is to be had is answered against the combination being built rather
-// than against the listing as a whole, which on a chair offering express on
-// fourteen of its colours range-wide but only three on the arms already chosen
-// is the difference between a useful line and a misleading one.
+// broadcast). They decide two things, and only ever narrow:
+//  - WHICH services the listing still offers, since only the variations still
+//    matching the picks are in play. Nothing picked means nothing ruled out, so
+//    every service any variation carries is offered as normal, and a service is
+//    crossed out only once a pick has actually cost it;
+//  - the WORDING of the ones that have been: where a service is to be had is
+//    answered against the combination being built rather than against the
+//    listing as a whole, which on a chair offering express on fourteen of its
+//    colours range-wide but only three on the arms already chosen is the
+//    difference between a useful line and a misleading one.
 export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean; variantAlternatives?: boolean; chosenValueIds?: string[] }
 
 export type TierOption = {
@@ -160,23 +167,29 @@ function chooseTier(delivery: ProductDelivery, requestedKey: string | undefined,
   return delivery.tiers[0]?.key ?? null
 }
 
-// What a listing page can promise before the shopper has picked a variation:
-// the services EVERY variation of it offers, each one costed and dated at its
-// worst across them. Only what they all agree on is shown, and never in the
-// best light, so nothing on offer here can be withdrawn or dearer once a
-// combination is settled - at which point the picker asks again for that exact
-// variation and this preview is replaced by the real answer.
+// What a listing page can promise before the shopper has settled on a variation:
+// every service ANY of the variations still in play offers, each one costed and
+// dated at its worst across the ones that carry it.
 //
-// Null when the variations agree on nothing (or there are none), which leaves
-// the listing with no estimate, exactly as before.
+// Every service they offer between them, deliberately - not only the ones they
+// all agree on. A shopper who has picked nothing has ruled nothing out, and a
+// service crossed out on a page they have not touched reads as a refusal: the
+// shop plainly does sell two-person delivery on this chair, and being told
+// which colours carry it before being asked which colour they want is an answer
+// to a question nobody put. The narrowing is the variations' job. As picks come
+// in the caller passes only the children still matching them, and a service that
+// falls out of that set is one their own choice has just cost them - which is
+// the moment it earns the crossed-out chip (see otherTiersFor).
+//
+// Never in the best light, though: each service takes the dearest price and the
+// latest date among the variations offering it, so nothing shown here gets
+// dearer or later once a combination is settled and the picker asks again for
+// that exact variation.
+//
+// Null when none of them offers anything (or there are none), which leaves the
+// listing with whatever it resolved to on its own.
 function mergeVariantDeliveries(parentProductId: string, children: ProductDelivery[], ctx: ResolveContext, timing: AshSettings): ProductDelivery | null {
   if (children.length === 0) return null
-
-  // Offered by all of them, in the first child's order.
-  const shared = children[0]!.tiers
-    .map((t) => t.key)
-    .filter((key) => children.every((c) => c.tiers.some((t) => t.key === key)))
-  if (shared.length === 0) return null
 
   const dateFor = (delivery: ProductDelivery, key: string): string => {
     const tier = delivery.tiers.find((t) => t.key === key)
@@ -188,33 +201,56 @@ function mergeVariantDeliveries(parentProductId: string, children: ProductDelive
     return est.available && est.targetDate ? est.targetDate : LATEST_DATE
   }
 
-  // One variation stands in for the lot: the slowest of them across the shared
-  // services. Its timing and its stock decide the dates shown, so the preview
-  // reads as the latest any variation would land rather than the earliest.
-  let representative = children[0]!
-  let worstSoFar = ''
-  for (const child of children) {
-    const worst = shared.map((key) => dateFor(child, key)).reduce((a, b) => (a > b ? a : b), '')
-    if (worst > worstSoFar) { worstSoFar = worst; representative = child }
-  }
+  // Every service on offer between them, in the order the variations list them,
+  // so the preview reads down the page in the shop's own service order.
+  const keys = [...new Set(children.flatMap((c) => c.tiers.map((t) => t.key)))]
+  if (keys.length === 0) return null
 
-  const tiers = shared.map((key) => {
+  // One variation stands in for the lot PER SERVICE: the slowest of the ones
+  // carrying it, whose timing and stock decide that service's date. Per service
+  // rather than one stand-in for the whole listing, because the slowest
+  // variation overall need not offer the service at all, and where it does not
+  // its stock has nothing to say about when that service would land.
+  const stockByTier = new Map<string, StockState>()
+  const tiers: ResolvedTierOption[] = []
+  let slowest = children[0]!
+  let slowestDate = ''
+  for (const key of keys) {
+    const offering = children.filter((c) => c.tiers.some((t) => t.key === key))
+    let representative = offering[0]!
+    let worst = ''
+    for (const child of offering) {
+      const date = dateFor(child, key)
+      if (date > worst) { worst = date; representative = child }
+    }
+    if (worst > slowestDate) { slowestDate = worst; slowest = representative }
+    stockByTier.set(key, representative.stock)
     const base = representative.tiers.find((t) => t.key === key)!
-    // Dearest across the variations, so a preview never undercuts the price the
-    // chosen variation will actually charge.
-    const price = children
+    // Dearest across the variations offering it, so a preview never undercuts
+    // the price the chosen variation will actually charge.
+    const price = offering
       .map((c) => Number(c.tiers.find((t) => t.key === key)?.price ?? 0) || 0)
       .reduce((a, b) => Math.max(a, b), 0)
-    return {
+    tiers.push({
       ...base,
       price: price.toFixed(2),
-      // Priced per person if ANY variation prices it that way - the shopper is
+      // Priced per person if ANY of them prices it that way - the shopper is
       // told so rather than shown a flat figure that may not apply.
-      perPerson: children.some((c) => c.tiers.find((t) => t.key === key)?.perPerson ?? false),
-    }
-  })
+      perPerson: offering.some((c) => c.tiers.find((t) => t.key === key)?.perPerson ?? false),
+    })
+  }
 
-  return { productId: parentProductId, stock: representative.stock, tiers, perPersonCount: representative.perPersonCount }
+  // The listing-level stock, for anything asking the delivery as a whole rather
+  // than a service at a time: the slowest variation's, on the same footing.
+  return { productId: parentProductId, stock: slowest.stock, stockByTier, tiers, perPersonCount: slowest.perPersonCount }
+}
+
+// Which stock decides a given service's date. On a real product there is one
+// answer; on a listing-wide preview the service and the stock come from
+// whichever variation is slowest at THAT service, which is not always the same
+// one (see mergeVariantDeliveries).
+function stockFor(delivery: ProductDelivery, tierKey: string | null): StockState {
+  return (tierKey ? delivery.stockByTier?.get(tierKey) : null) ?? delivery.stock
 }
 
 // Sorts after every real ISO date, so "no date at all" wins a worst-case pick.
@@ -245,7 +281,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   const parentOf = wantAlternatives.length > 0 ? await getVariantParents(wantAlternatives) : new Map<string, string>()
   const listingOf = (productId: string) => parentOf.get(productId) ?? productId
   const needChildren = new Set<string>([
-    ...inputs.filter((i) => i.variantFallback && !deliveries.get(i.productId)).map((i) => i.productId),
+    ...inputs.filter((i) => i.variantFallback).map((i) => i.productId),
     ...wantAlternatives.map(listingOf),
   ])
   const childIdsByListing = needChildren.size > 0 ? await getVariantChildIds([...needChildren]) : new Map<string, string[]>()
@@ -257,16 +293,27 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     ? await getVariantOptionValues(allChildren)
     : new Map<string, VariantOptionValue[]>()
 
-  for (const [listingId, ids] of childIdsByListing) {
-    if (!inputs.some((i) => i.variantFallback && i.productId === listingId) || deliveries.get(listingId)) continue
+  // The listing-wide preview, built out of the variations still in play rather
+  // than out of whatever the listing's own product id happens to resolve to. A
+  // listing with variations is never the thing bought - the basket takes the
+  // variation's own product - so its own row's services are a fiction, and where
+  // the two disagree the variations are the ones telling the truth. With nothing
+  // picked yet, all of them are in play (see childIdsInPlay).
+  for (const input of inputs) {
+    if (!input.variantFallback) continue
+    const ids = childIdsInPlay(childOptionValues, childIdsByListing.get(input.productId) ?? [], input.chosenValueIds)
     const resolved = ids.map((id) => childDeliveries.get(id)).filter((d): d is ProductDelivery => !!d)
-    const merged = mergeVariantDeliveries(listingId, resolved, ctx, settings)
-    if (merged) deliveries.set(listingId, merged)
+    const merged = mergeVariantDeliveries(input.productId, resolved, ctx, settings)
+    if (merged) deliveries.set(input.productId, merged)
   }
 
-  // The services the rest of the listing offers that THIS product does not, each
-  // with the choice that carries it. Everything it needs is already in hand, so
-  // it costs no further queries.
+  // The services somewhere in this listing that the answer above does not carry,
+  // each with the choice that carries it. On a settled variation that is what
+  // the other variations offer and this one does not; on a listing still being
+  // narrowed it is what the shopper's own picks have just put out of reach,
+  // since everything still in play is already in `own` (see
+  // mergeVariantDeliveries) - which is why an untouched page crosses nothing
+  // out. Everything it needs is already in hand, so it costs no further queries.
   function otherTiersFor(
     productId: string,
     own: ProductDelivery | undefined,
@@ -358,7 +405,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
       holidays: ctx.holidays,
       timing: settings,
       tier: tierOption.modifiers,
-      stock: delivery.stock,
+      stock: stockFor(delivery, tierKey),
     })
 
     items.push({
@@ -384,7 +431,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           holidays: ctx.holidays,
           timing: settings,
           tier: t.modifiers,
-          stock: delivery.stock,
+          stock: stockFor(delivery, t.key),
         })
         const dated = tEst.available && tEst.targetDate ? tEst.targetDate : null
         return {

@@ -53,6 +53,48 @@ function labelsInOrder(values: VariantOptionValue[]): string[] {
   return [...seen.entries()].sort((a, b) => a[1] - b[1]).map(([label]) => label)
 }
 
+// The shopper's picks as option -> value, over the values this listing knows. A
+// value id it does not (a stale pick, another product's page) is ignored rather
+// than filtering everything out.
+function picksOf(all: VariantOptionValue[], chosenValueIds?: string[] | null): Map<string, string> {
+  const optionOfValue = new Map(all.map((v) => [v.valueId, v.optionId]))
+  const picks = new Map<string, string>()
+  for (const valueId of chosenValueIds ?? []) {
+    const optionId = optionOfValue.get(valueId)
+    if (optionId) picks.set(optionId, valueId)
+  }
+  return picks
+}
+
+// Which of a listing's variations are still in play, given what the shopper has
+// picked so far. The listing's delivery preview is built out of exactly these:
+// a service one of them still carries is a service the shopper can still have,
+// so it is shown as a service like any other, and only once a pick has put the
+// last variation carrying it out of play has it actually been lost - which is
+// when it earns the crossed-out chip and the "available in" line.
+//
+// Nothing picked means everything in play, which is the whole point: a shopper
+// who has chosen nothing has ruled nothing out, and crossing services out before
+// they have touched a control tells them the shop cannot do something it plainly
+// can. Picks matching no variation at all (a stale selection, a listing rebuilt
+// underneath it) fall back to the same answer rather than emptying the page.
+export function childIdsInPlay(
+  optionValuesByChild: Map<string, VariantOptionValue[]>,
+  childIds: string[],
+  chosenValueIds?: string[] | null,
+): string[] {
+  const picks = picksOf(childIds.flatMap((id) => optionValuesByChild.get(id) ?? []), chosenValueIds)
+  if (picks.size === 0) return childIds
+  const matching = childIds.filter((id) => {
+    const values = optionValuesByChild.get(id) ?? []
+    for (const [optionId, valueId] of picks) {
+      if (!values.some((v) => v.optionId === optionId && v.valueId === valueId)) return false
+    }
+    return true
+  })
+  return matching.length > 0 ? matching : childIds
+}
+
 // Compares two option-value sets and reports where the first narrows the second,
 // option by option. The shared half of every answer below.
 function narrowingGroups(
@@ -121,15 +163,7 @@ export function availableWithGroups(
     .sort((a, b) => a.optionPosition - b.optionPosition)
     .map((v) => v.optionId)
 
-  // The picks, as option -> value. A value id this listing does not know (a
-  // stale pick, another product's page) is simply ignored rather than filtering
-  // everything out.
-  const optionOfValue = new Map(all.map((v) => [v.valueId, v.optionId]))
-  const picks = new Map<string, string>()
-  for (const valueId of chosenValueIds ?? []) {
-    const optionId = optionOfValue.get(valueId)
-    if (optionId) picks.set(optionId, valueId)
-  }
+  const picks = picksOf(all, chosenValueIds)
   const globalAnswer = (): AvailableWith => ({ groups: narrowingGroups(optionIds, offering, all), join: 'and' })
   if (picks.size === 0) return globalAnswer()
 

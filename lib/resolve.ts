@@ -49,6 +49,13 @@ export type ProductDelivery = {
   // when no attribute is nominated or its value carries no readable number. A
   // per-person service on a line whose count is null is blocked, never mispriced.
   perPersonCount: number | null
+  // Stock per service, set only on the listing-wide preview a product page
+  // builds out of a set of variations (see mergeVariantDeliveries). There the
+  // service and the stock come from different variations - the slowest one
+  // carrying express need not be the slowest one overall - so a single stock for
+  // the whole listing would date some services off a variation that does not
+  // even offer them. Absent on a real product, whose stock is simply its own.
+  stockByTier?: Map<string, StockState>
 }
 
 export type ResolveContext = {
