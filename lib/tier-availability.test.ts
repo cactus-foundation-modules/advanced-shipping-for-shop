@@ -17,6 +17,17 @@ function child(width: string, finish: string): VariantOptionValue[] {
 const listing = new Map<string, VariantOptionValue[]>()
 for (const w of WIDTHS) for (const f of FINISHES) listing.set(`${w}/${f}`, child(w, f))
 const ALL = [...listing.keys()]
+
+// A chair upholstered in two places, seat and back, each with its own colour
+// option - the shape the paired-relaxation cases below need.
+const SEATS = ['Black Fabric', 'Black Leather', 'Bergamot Cherry']
+const BACKS = ['Black Fabric', 'Black Leather', 'Myrrh Green']
+function chairChild(seat: string, back: string): VariantOptionValue[] {
+  return [
+    { optionId: 's', optionName: 'Upholstery Colour', optionPosition: 0, valueId: `s-${seat}`, valueLabel: seat, valuePosition: SEATS.indexOf(seat) },
+    { optionId: 'b', optionName: 'Back Colour', optionPosition: 1, valueId: `b-${back}`, valueLabel: back, valuePosition: BACKS.indexOf(back) },
+  ]
+}
 const withWidths = (...widths: string[]) => ALL.filter((id) => widths.includes(id.split('/')[0]!))
 
 describe('availableWithGroups', () => {
@@ -81,6 +92,35 @@ describe('availableWithGroups', () => {
 
   it('has nothing to say when no variation offers it at all', () => {
     expect(availableWithGroups(listing, ALL, []).groups).toEqual([])
+  })
+
+  // The Chiro Plus defect: seat and back are upholstered as a pair (Black Fabric
+  // with Black Fabric, Black Leather with Black Leather) and express sits on the
+  // all-black builds only. From a two-tone build, all-leather needs seat AND
+  // back to move together - no single relaxation can see it, so the line named
+  // only Black Fabric and told the shopper leather was not to be had.
+  it('names a matched pair of options once, including values only a paired change reaches', () => {
+    const chair = new Map<string, VariantOptionValue[]>([
+      ['bf', chairChild('Black Fabric', 'Black Fabric')],
+      ['bl', chairChild('Black Leather', 'Black Leather')],
+      ['ch-bf', chairChild('Bergamot Cherry', 'Black Fabric')],
+      ['ch-mg', chairChild('Bergamot Cherry', 'Myrrh Green')],
+    ])
+    const ids = [...chair.keys()]
+    const result = availableWithGroups(chair, ids, ['bf', 'bl'], ['s-Bergamot Cherry', 'b-Black Fabric'])
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]!.labels).toEqual(['Black Fabric', 'Black Leather'])
+    expect(availableWithPhrase(result)).toBe('Available in Black Fabric or Black Leather')
+  })
+
+  it('leaves a pair narrowing to different values alone - neither is a way out by itself', () => {
+    // Offered only at 120cm in Oak; a shopper on 160cm/Walnut must change both,
+    // and "in 120cm or Oak" would tell them either alone brings it back.
+    const offering = ['120cm/Oak']
+    const result = availableWithGroups(listing, ALL, offering, ['w-160cm', 'f-Walnut'])
+    expect(result.join).toBe('and')
+    expect(result.groups.map((g) => g.optionName)).toEqual(['Width', 'Finish'])
+    expect(result.groups.map((g) => g.labels)).toEqual([['120cm'], ['Oak']])
   })
 
   it('is silent on a shop with no variations rather than guessing', () => {

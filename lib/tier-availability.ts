@@ -141,7 +141,10 @@ function narrowingGroups(
 //     to say is which of the options they have NOT yet picked would take them
 //     there - measured among the variations that match their picks.
 //  2. If not, one of their own picks is in the way: each is relaxed in turn to
-//     find which, and what it would have to become.
+//     find which, and what it would have to become. Picks are also relaxed in
+//     PAIRS to catch options that narrow in step (see 2b below), since a
+//     variation reachable only by moving two picks together is invisible to
+//     every one-at-a-time relaxation.
 //  3. With nothing picked at all (or nothing that explains it), it falls back to
 //     the plain listing-wide answer, which is all there is to give.
 export function availableWithGroups(
@@ -167,11 +170,11 @@ export function availableWithGroups(
   const globalAnswer = (): AvailableWith => ({ groups: narrowingGroups(optionIds, offering, all), join: 'and' })
   if (picks.size === 0) return globalAnswer()
 
-  // Children matching the picks, optionally with one option's pick set aside.
-  const matching = (ids: string[], relaxOptionId?: string) => ids.filter((id) => {
+  // Children matching the picks, optionally with some picks set aside.
+  const matching = (ids: string[], relaxOptionIds?: Set<string>) => ids.filter((id) => {
     const values = optionValuesByChild.get(id) ?? []
     for (const [optionId, valueId] of picks) {
-      if (optionId === relaxOptionId) continue
+      if (relaxOptionIds?.has(optionId)) continue
       if (!values.some((v) => v.optionId === optionId && v.valueId === valueId)) return false
     }
     return true
@@ -193,14 +196,55 @@ export function availableWithGroups(
   const groups: AvailableWithGroup[] = []
   for (const optionId of optionIds) {
     if (!picks.has(optionId)) continue
-    const freed = matching(offeringChildIds, optionId)
+    const freed = matching(offeringChildIds, new Set([optionId]))
     if (freed.length === 0) continue
     groups.push(...narrowingGroups(
       [optionId],
       valuesOf(freed),
-      valuesOf(matching(allChildIds, optionId)),
+      valuesOf(matching(allChildIds, new Set([optionId]))),
     ))
   }
+
+  // 2b. Two picks that move TOGETHER. Options sold as matched pairs - a seat and
+  //     back upholstered in the same material, say - narrow in step, and the
+  //     variation both would have to change to is invisible to any single
+  //     relaxation. So pairs of picks are relaxed together, and the answer is
+  //     trusted only in the one shape that cannot mislead: both options narrowed
+  //     to the SAME labels. Those read as one choice to the shopper (picking the
+  //     value on either option leads the other to follow), so one group names
+  //     them once - "in Black Fabric or Black Leather" - and any single-option
+  //     group it subsumes drops away. Pairs narrowing to DIFFERENT labels are
+  //     discarded: listing those groups would offer each as a way out on its
+  //     own, which a paired change is not.
+  const pickedOptionIds = optionIds.filter((id) => picks.has(id))
+  for (let i = 0; i < pickedOptionIds.length; i++) {
+    for (let j = i + 1; j < pickedOptionIds.length; j++) {
+      const pair = new Set([pickedOptionIds[i]!, pickedOptionIds[j]!])
+      const freed = matching(offeringChildIds, pair)
+      if (freed.length === 0) continue
+      const pairGroups = narrowingGroups(
+        [pickedOptionIds[i]!, pickedOptionIds[j]!],
+        valuesOf(freed),
+        valuesOf(matching(allChildIds, pair)),
+      )
+      if (pairGroups.length !== 2) continue
+      const [first, second] = pairGroups as [AvailableWithGroup, AvailableWithGroup]
+      const sameLabels = first.labels.length === second.labels.length
+        && first.labels.every((l) => second.labels.includes(l))
+      if (!sameLabels) continue
+      // A single-option group this merged one covers entirely says less than the
+      // merged one does; an EQUAL one already says it all, so nothing changes.
+      const covered = (g: AvailableWithGroup) =>
+        (g.optionName === first.optionName || g.optionName === second.optionName)
+        && g.labels.every((l) => first.labels.includes(l))
+      if (groups.some((g) => covered(g) && g.labels.length === first.labels.length)) continue
+      for (let k = groups.length - 1; k >= 0; k--) {
+        if (covered(groups[k]!)) groups.splice(k, 1)
+      }
+      groups.push(first)
+    }
+  }
+
   // 3. No single change explains it (several would have to move at once), so the
   //    listing-wide answer is the only honest thing left.
   return groups.length > 0 ? { groups, join: 'or' } : globalAnswer()
