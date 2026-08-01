@@ -179,7 +179,7 @@ function chooseTier(delivery: ProductDelivery, requestedKey: string | undefined,
 // to a question nobody put. The narrowing is the variations' job. As picks come
 // in the caller passes only the children still matching them, and a service that
 // falls out of that set is one their own choice has just cost them - which is
-// the moment it earns the crossed-out chip (see otherTiersFor).
+// the moment it earns the unavailable chip (see otherTiersFor).
 //
 // Never in the best light, though: each service takes the dearest price and the
 // latest date among the variations offering it, so nothing shown here gets
@@ -323,7 +323,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     const childIds = childIdsByListing.get(listingOf(productId)) ?? []
     if (childIds.length === 0) return []
     const ownKeys = new Set((own?.tiers ?? []).map((t) => t.key))
-    // Keys in the order the variations themselves list them, so the crossed-out
+    // Keys in the order the variations themselves list them, so the unavailable
     // services read down the page in the shop's own service order.
     const seen = new Set<string>()
     const extras: UnavailableTierOption[] = []

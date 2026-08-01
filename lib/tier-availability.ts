@@ -71,7 +71,7 @@ function picksOf(all: VariantOptionValue[], chosenValueIds?: string[] | null): M
 // a service one of them still carries is a service the shopper can still have,
 // so it is shown as a service like any other, and only once a pick has put the
 // last variation carrying it out of play has it actually been lost - which is
-// when it earns the crossed-out chip and the "available in" line.
+// when it earns the unavailable chip and the "available in" line.
 //
 // Nothing picked means everything in play, which is the whole point: a shopper
 // who has chosen nothing has ruled nothing out, and crossing services out before
@@ -241,7 +241,7 @@ function carriesOwnPreposition(phrase: string): boolean {
   return /^with(out)?\b/i.test(phrase)
 }
 
-// The whole line printed under a crossed-out service: "Available in 160 to
+// The whole line printed under an unavailable service: "Available in 160 to
 // 180cm", or "Available With Headrest" where the value says its own preposition.
 // Where two options both have to move, only the FIRST plain phrase takes the
 // "in" - "available in 160 to 180cm and Oak", not "…and in Oak" - since one

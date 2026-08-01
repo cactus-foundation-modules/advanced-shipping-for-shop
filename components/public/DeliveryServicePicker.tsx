@@ -51,10 +51,13 @@ const css = `.ash-svc{margin-top:14px}
   .ash-svc .scl-hint{padding:0.45rem 0.7875rem}
 }
 /* A service another variation of this listing carries but this one does not:
-   the same chip, struck through and dead, with a line under it saying which
-   choice does carry it. Dashed like an out-of-reach variation choice, and in the
-   same muted ink, so the two rows on a product page read as one language rather
-   than two. Not a <button> and not a radio - there is nothing here to pick. */
+   the same chip, dead, saying "Unavailable" where a live chip carries its price,
+   with a line under it saying which choice does carry it. The name is left
+   readable rather than struck through - a shopper is meant to recognise the
+   service, and the word in the price slot is what says they cannot have it here.
+   Dashed like an out-of-reach variation choice, and in the same muted ink, so the
+   two rows on a product page read as one language rather than two. Not a
+   <button> and not a radio - there is nothing here to pick. */
 .ash-svc-off{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0.3375rem;margin-top:0.45rem}
 /* The two lines are one statement - the service and where it is to be had - so
    they sit as close as their own text allows: no gap between them, and a line
@@ -64,7 +67,7 @@ const css = `.ash-svc{margin-top:14px}
 /* The chip is inert, so it must not light up under the pointer the way a live
    switch chip does. */
 .ash-svc .ash-svc-offchip:hover{border-color:var(--color-border);background:var(--color-surface)}
-.ash-svc-offchip .ash-svc-strike{text-decoration:line-through;font-weight:600}
+.ash-svc-offchip .ash-svc-offname{font-weight:600}
 .ash-svc-offchip .scl-hint-fee{color:var(--color-text-muted)}
 .ash-svc-note{font-size:0.6875rem;font-weight:500;line-height:1.15;color:var(--color-text-muted)}`
 
@@ -100,7 +103,7 @@ const VARIANT_SELECTION_EVENT = 'cactus-shop-variant-selection'
 // `chosenValueIds` arrived alongside the rest in shop-variations 0.1.104 and is
 // read defensively: an older copy of that module publishes the same event
 // without it, which simply reads as "nothing picked yet" and words the
-// crossed-out services from the listing as a whole, exactly as before.
+// unavailable services from the listing as a whole, exactly as before.
 type VariantSelectionDetail = { slug: string; parentProductId: string | null; productId: string | null; allOptionsChosen: boolean; chosenValueIds?: string[] }
 
 function currentVariantSelection(): VariantSelectionDetail | null {
@@ -273,11 +276,14 @@ export function DeliveryServicePicker({
             {others.map((o) => (
               // The whole sentence rides on `title` as well as being printed:
               // the chip is narrow, the note wraps, and a shopper hovering the
-              // struck-out name should not have to read it twice to be sure.
-              <span key={o.key} className="scl-hint ash-svc-offchip" title={`${o.label} - ${o.note}`}>
+              // dead name should not have to read it twice to be sure.
+              <span key={o.key} className="scl-hint ash-svc-offchip" title={`${o.label} - unavailable. ${o.note}`}>
                 <span>
-                  <span className="ash-svc-strike">{o.label}</span>
-                  <span className="scl-hint-fee">{priceLabel(o.priceEffective, currencySymbol)}</span>
+                  <span className="ash-svc-offname">{o.label}</span>
+                  {/* Where a live chip carries its fee. The price of a service
+                      this variation cannot have is not a price the shopper can
+                      pay, so the slot says so instead of quoting a number. */}
+                  <span className="scl-hint-fee">Unavailable</span>
                 </span>
                 <span className="ash-svc-note">{o.note}</span>
               </span>
@@ -287,14 +293,6 @@ export function DeliveryServicePicker({
       </div>
     </>
   )
-}
-
-// The price on a crossed-out service, worded exactly as the live chips word
-// theirs (see tier-labels' tierOptionSummary) - a shopper comparing the two rows
-// is comparing like with like.
-function priceLabel(price: number | null, symbol: string): string {
-  if (price == null) return 'Per person'
-  return price <= 0 ? 'Free' : `+${symbol}${price.toFixed(2)}`
 }
 
 // A product with three services, priced and dated, so the editor canvas shows
@@ -317,7 +315,8 @@ const PREVIEW_ITEM: ItemEstimate = {
     { key: 'installed', label: 'Delivered and installed', description: 'Built in the room of your choice, packaging taken away.', price: '66.00', priceEffective: 66, targetDate: '2026-08-14', targetLabel: 'Fri 14 Aug', targetByLabel: 'Fri 14th' },
   ],
   // One service the preview product's other variations carry and this one does
-  // not, so the editor canvas shows the crossed-out row at its real size too.
+  // not, so the editor canvas shows the unavailable-service row at its real size
+  // too.
   otherTiers: [
     { key: 'two-man', label: 'Two-person delivery', description: null, priceEffective: 24, note: 'Available in 160 to 200cm' },
   ],

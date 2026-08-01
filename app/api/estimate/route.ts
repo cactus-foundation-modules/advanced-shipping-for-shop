@@ -29,7 +29,7 @@ const Body = z.object({
         // rather than hiding them.
         variantAlternatives: z.boolean().optional(),
         // The variation options picked so far, which decide how those
-        // crossed-out services are worded (see EstimateItemInput). Presentation
+        // unavailable services are worded (see EstimateItemInput). Presentation
         // only - nothing is priced or promised from them.
         chosenValueIds: z.array(z.string().min(1).max(100)).max(50).optional(),
       }),
