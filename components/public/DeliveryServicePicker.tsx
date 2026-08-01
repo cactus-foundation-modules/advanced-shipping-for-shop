@@ -97,7 +97,11 @@ type EstimateResponse = { items: ItemEstimate[]; controlStyle?: CartControlStyle
 // break the build there (the same rule the delivery module's variations bridge
 // follows on the server). A catalogue with no variations simply never fires it.
 const VARIANT_SELECTION_EVENT = 'cactus-shop-variant-selection'
-type VariantSelectionDetail = { slug: string; parentProductId: string | null; productId: string | null; allOptionsChosen: boolean }
+// `chosenValueIds` arrived alongside the rest in shop-variations 0.1.104 and is
+// read defensively: an older copy of that module publishes the same event
+// without it, which simply reads as "nothing picked yet" and words the
+// crossed-out services from the listing as a whole, exactly as before.
+type VariantSelectionDetail = { slug: string; parentProductId: string | null; productId: string | null; allOptionsChosen: boolean; chosenValueIds?: string[] }
 
 function currentVariantSelection(): VariantSelectionDetail | null {
   if (typeof window === 'undefined') return null
@@ -126,11 +130,18 @@ export function DeliveryServicePicker({
   // incomplete (or there are no variations at all). Null asks about the listing
   // with the variant fallback on; a value asks about that exact variation.
   const [variantId, setVariantId] = useState<string | null>(null)
+  // The options picked so far, whether or not they add up to a whole variation.
+  // A half-built combination still decides where a service it cannot have IS to
+  // be had - "in Black Fabric, Blue or Charcoal" means given the arms and
+  // adjustments already chosen, not across the range as a whole. Joined into one
+  // string so it can be an effect dependency without re-firing on every render.
+  const [chosenValueKey, setChosenValueKey] = useState('')
 
   const slug = slugProp ?? (typeof window === 'undefined' ? null : slugFromLocation())
 
-  const load = useCallback(async (tierKey: string | null, variantProductId: string | null) => {
+  const load = useCallback(async (tierKey: string | null, variantProductId: string | null, valueKey: string) => {
     if (!slug) return
+    const chosenValueIds = valueKey ? valueKey.split('|') : undefined
     try {
       const res = await fetch('/api/m/advanced-shipping-for-shop/estimate', {
         method: 'POST',
@@ -140,11 +151,11 @@ export function DeliveryServicePicker({
             // Either way the answer covers the whole listing: what this product
             // can have, and (as `otherTiers`) what the rest of its variations can
             // that it cannot, so nothing the shop sells is quietly dropped.
-            ? { productId: variantProductId, tierKey: tierKey ?? undefined, variantAlternatives: true }
+            ? { productId: variantProductId, tierKey: tierKey ?? undefined, variantAlternatives: true, chosenValueIds }
             // Nothing settled yet: ask about the listing, and let the server
             // answer from its variations where the listing itself carries no
             // services (a catalogue that keys delivery off the variations).
-            : { slug, tierKey: tierKey ?? undefined, variantFallback: true, variantAlternatives: true }],
+            : { slug, tierKey: tierKey ?? undefined, variantFallback: true, variantAlternatives: true, chosenValueIds }],
         }),
       })
       if (!res.ok) return
@@ -169,6 +180,7 @@ export function DeliveryServicePicker({
     const apply = (detail: VariantSelectionDetail | null) => {
       if (detail && slug && detail.slug && detail.slug !== slug) return
       setVariantId(detail?.productId ?? null)
+      setChosenValueKey((detail?.chosenValueIds ?? []).join('|'))
     }
     apply(currentVariantSelection())
     const onSelection = (e: Event) => apply((e as CustomEvent<VariantSelectionDetail>).detail)
@@ -180,8 +192,8 @@ export function DeliveryServicePicker({
     if (preview || !slug) return
     knownKeys.current = new Set(getCart().map(cartLineKey))
     // eslint-disable-next-line react-hooks/set-state-in-effect -- delegating to an async loader; setState runs after the estimate fetch resolves
-    void load(readStoredTier(slug), variantId)
-  }, [preview, slug, variantId, load])
+    void load(readStoredTier(slug), variantId, chosenValueKey)
+  }, [preview, slug, variantId, chosenValueKey, load])
 
   useEffect(() => {
     if (preview) return

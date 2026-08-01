@@ -31,7 +31,14 @@ import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-d
 // silently hiding them. Set by the product page's picker, never by the cart -
 // a basket line is a thing the shopper has already chosen, not a choice still
 // being made.
-export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean; variantAlternatives?: boolean }
+// `chosenValueIds` are the variation options the shopper has picked so far
+// (shop-variations' own option-value ids, straight off its page-wide selection
+// broadcast). They only affect the WORDING of the crossed-out services: where a
+// service is to be had is answered against the combination being built rather
+// than against the listing as a whole, which on a chair offering express on
+// fourteen of its colours range-wide but only three on the arms already chosen
+// is the difference between a useful line and a misleading one.
+export type EstimateItemInput = { productId: string; tierKey?: string; quantity?: number; ref?: string; variantFallback?: boolean; variantAlternatives?: boolean; chosenValueIds?: string[] }
 
 export type TierOption = {
   key: string
@@ -260,7 +267,12 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   // The services the rest of the listing offers that THIS product does not, each
   // with the choice that carries it. Everything it needs is already in hand, so
   // it costs no further queries.
-  function otherTiersFor(productId: string, own: ProductDelivery | undefined, shown: (p: number | null) => number | null): UnavailableTierOption[] {
+  function otherTiersFor(
+    productId: string,
+    own: ProductDelivery | undefined,
+    shown: (p: number | null) => number | null,
+    chosenValueIds: string[] | undefined,
+  ): UnavailableTierOption[] {
     const childIds = childIdsByListing.get(listingOf(productId)) ?? []
     if (childIds.length === 0) return []
     const ownKeys = new Set((own?.tiers ?? []).map((t) => t.key))
@@ -289,9 +301,13 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           childOptionValues,
           childIds,
           offering,
-          // A product that is itself a variation is the shopper's current pick,
-          // so an option it already satisfies is not the one in the way.
-          parentOf.has(productId) ? productId : null,
+          // What the shopper has picked so far. A product that IS a variation is
+          // a settled combination in its own right, so its own values stand in
+          // where the caller sent none (an older storefront, or a page with no
+          // variation controls on it).
+          chosenValueIds?.length
+            ? chosenValueIds
+            : (childOptionValues.get(productId) ?? []).map((v) => v.valueId),
         )
         extras.push({
           key: tier.key,
@@ -329,7 +345,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     // Worked out even for a product with no services of its own: a listing whose
     // variations agree on nothing still has services to tell the shopper about,
     // and "nothing at all" would be the one answer that is plainly wrong.
-    const otherTiers = input.variantAlternatives ? otherTiersFor(input.productId, delivery, shown) : undefined
+    const otherTiers = input.variantAlternatives ? otherTiersFor(input.productId, delivery, shown, input.chosenValueIds) : undefined
     if (!delivery || !tierOption) {
       const empty = EMPTY_ITEM(input.productId, ref, name)
       items.push(otherTiers?.length ? { ...empty, otherTiers } : empty)

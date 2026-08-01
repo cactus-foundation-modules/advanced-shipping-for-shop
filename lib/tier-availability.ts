@@ -31,6 +31,17 @@ export type AvailableWithGroup = {
   contiguous: boolean
 }
 
+// The groups plus how they relate to each other, which is not the same question
+// twice over. Where the shopper still has options to pick, every group has to
+// hold at once - "in 160cm and Oak" means both. Where one of their own picks is
+// in the way, each group is a way OUT on its own - changing the arms would do
+// it, and so would changing the adjustments - and joining those with "and" would
+// tell them to do twice the work.
+export type AvailableWith = {
+  groups: AvailableWithGroup[]
+  join: 'and' | 'or'
+}
+
 // Distinct labels in the order the option itself lists them, deduped - two
 // variations of the same width are one width to a shopper.
 function labelsInOrder(values: VariantOptionValue[]): string[] {
@@ -42,47 +53,25 @@ function labelsInOrder(values: VariantOptionValue[]): string[] {
   return [...seen.entries()].sort((a, b) => a[1] - b[1]).map(([label]) => label)
 }
 
-// Which of the listing's options a shopper would have to change to get this
-// service, and what they would have to change them to.
-//
-// An option is only worth naming when it actually narrows things down: one whose
-// every value carries the service explains nothing (the service is not withheld
-// by that choice), and where the shopper has already settled on a variation, an
-// option whose current value is among the ones that carry it is not the culprit
-// either. What is left is the honest answer to "so how do I get this?".
-export function availableWithGroups(
-  optionValuesByChild: Map<string, VariantOptionValue[]>,
-  allChildIds: string[],
-  offeringChildIds: string[],
-  chosenChildId?: string | null,
+// Compares two option-value sets and reports where the first narrows the second,
+// option by option. The shared half of every answer below.
+function narrowingGroups(
+  optionIds: string[],
+  reachable: VariantOptionValue[],
+  everything: VariantOptionValue[],
+  skipOptionIds?: Set<string>,
 ): AvailableWithGroup[] {
-  if (offeringChildIds.length === 0) return []
-  const valuesOf = (ids: string[]) => ids.flatMap((id) => optionValuesByChild.get(id) ?? [])
-  const all = valuesOf(allChildIds)
-  const offering = valuesOf(offeringChildIds)
-  if (offering.length === 0) return []
-
-  // Option order is the order the product page shows its controls in, so the
-  // sentence names them the way the shopper reads down the page.
-  const optionIds = [...new Map(all.map((v) => [v.optionId, v])).values()]
-    .sort((a, b) => a.optionPosition - b.optionPosition)
-    .map((v) => v.optionId)
-
-  const chosen = chosenChildId ? optionValuesByChild.get(chosenChildId) ?? [] : []
   const groups: AvailableWithGroup[] = []
   for (const optionId of optionIds) {
-    const allHere = all.filter((v) => v.optionId === optionId)
-    const offeringHere = offering.filter((v) => v.optionId === optionId)
-    if (offeringHere.length === 0) continue
+    if (skipOptionIds?.has(optionId)) continue
+    const allHere = everything.filter((v) => v.optionId === optionId)
+    const reachableHere = reachable.filter((v) => v.optionId === optionId)
+    if (reachableHere.length === 0 || allHere.length === 0) continue
     const allLabels = labelsInOrder(allHere)
-    const labels = labelsInOrder(offeringHere)
-    // Every value of this option carries the service, so it is not what is
-    // holding the service back and naming it would only mislead.
+    const labels = labelsInOrder(reachableHere)
+    // Every value of this option leads to the service, so it is not what is
+    // holding it back and naming it would only mislead.
     if (labels.length >= allLabels.length) continue
-    // The shopper's own pick already carries it: some OTHER option is the one in
-    // the way, and this one stays as it is.
-    const mine = chosen.find((v) => v.optionId === optionId)?.valueLabel
-    if (mine && labels.includes(mine)) continue
     const indices = labels.map((l) => allLabels.indexOf(l))
     const first = indices[0] ?? 0
     groups.push({
@@ -92,6 +81,95 @@ export function availableWithGroups(
     })
   }
   return groups
+}
+
+// Which of the listing's options a shopper would have to choose (or change) to
+// get this service, and what they would have to choose.
+//
+// The answer is held against what they have picked ALREADY, which is the whole
+// difference between a useful line and a misleading one. A chair listing may
+// offer express delivery on fourteen of its twenty-four colours across the range
+// as a whole, but on the arms and adjustments this shopper has settled on, only
+// three of those colours have it. Answering from the listing rather than from
+// their half-built combination lists eleven colours that would not actually
+// bring the service back.
+//
+// So, in order:
+//  1. Can they still reach it without undoing anything? Then the only thing left
+//     to say is which of the options they have NOT yet picked would take them
+//     there - measured among the variations that match their picks.
+//  2. If not, one of their own picks is in the way: each is relaxed in turn to
+//     find which, and what it would have to become.
+//  3. With nothing picked at all (or nothing that explains it), it falls back to
+//     the plain listing-wide answer, which is all there is to give.
+export function availableWithGroups(
+  optionValuesByChild: Map<string, VariantOptionValue[]>,
+  allChildIds: string[],
+  offeringChildIds: string[],
+  chosenValueIds?: string[] | null,
+): AvailableWith {
+  const nothing: AvailableWith = { groups: [], join: 'and' }
+  if (offeringChildIds.length === 0) return nothing
+  const valuesOf = (ids: string[]) => ids.flatMap((id) => optionValuesByChild.get(id) ?? [])
+  const all = valuesOf(allChildIds)
+  const offering = valuesOf(offeringChildIds)
+  if (offering.length === 0) return nothing
+
+  // Option order is the order the product page shows its controls in, so the
+  // sentence names them the way the shopper reads down the page.
+  const optionIds = [...new Map(all.map((v) => [v.optionId, v])).values()]
+    .sort((a, b) => a.optionPosition - b.optionPosition)
+    .map((v) => v.optionId)
+
+  // The picks, as option -> value. A value id this listing does not know (a
+  // stale pick, another product's page) is simply ignored rather than filtering
+  // everything out.
+  const optionOfValue = new Map(all.map((v) => [v.valueId, v.optionId]))
+  const picks = new Map<string, string>()
+  for (const valueId of chosenValueIds ?? []) {
+    const optionId = optionOfValue.get(valueId)
+    if (optionId) picks.set(optionId, valueId)
+  }
+  const globalAnswer = (): AvailableWith => ({ groups: narrowingGroups(optionIds, offering, all), join: 'and' })
+  if (picks.size === 0) return globalAnswer()
+
+  // Children matching the picks, optionally with one option's pick set aside.
+  const matching = (ids: string[], relaxOptionId?: string) => ids.filter((id) => {
+    const values = optionValuesByChild.get(id) ?? []
+    for (const [optionId, valueId] of picks) {
+      if (optionId === relaxOptionId) continue
+      if (!values.some((v) => v.optionId === optionId && v.valueId === valueId)) return false
+    }
+    return true
+  })
+
+  // 1. Still reachable on what they have chosen: the unpicked options are the
+  //    whole story, and they are measured among the variations that match.
+  const reachable = matching(offeringChildIds)
+  if (reachable.length > 0) {
+    return {
+      groups: narrowingGroups(optionIds, valuesOf(reachable), valuesOf(matching(allChildIds)), new Set(picks.keys())),
+      join: 'and',
+    }
+  }
+
+  // 2. A pick is in the way. Relax them one at a time to find which one, and
+  //    what it would have to become - held against the other picks, so what is
+  //    offered is a combination that really exists.
+  const groups: AvailableWithGroup[] = []
+  for (const optionId of optionIds) {
+    if (!picks.has(optionId)) continue
+    const freed = matching(offeringChildIds, optionId)
+    if (freed.length === 0) continue
+    groups.push(...narrowingGroups(
+      [optionId],
+      valuesOf(freed),
+      valuesOf(matching(allChildIds, optionId)),
+    ))
+  }
+  // 3. No single change explains it (several would have to move at once), so the
+  //    listing-wide answer is the only honest thing left.
+  return groups.length > 0 ? { groups, join: 'or' } : globalAnswer()
 }
 
 // Two labels ending in a number and the same unit ("160cm", "180cm") read as a
@@ -133,18 +211,20 @@ function carriesOwnPreposition(phrase: string): boolean {
 // 180cm", or "Available With Headrest" where the value says its own preposition.
 // Where two options both have to move, only the FIRST plain phrase takes the
 // "in" - "available in 160 to 180cm and Oak", not "…and in Oak" - since one
-// preposition already governs the list.
+// preposition already governs the list. Whether that list joins on "and" or "or"
+// is the caller's to say (see AvailableWith): one is a combination to build, the
+// other a set of ways out.
 //
 // Falls back to a plain "Not available on this choice" when no option narrows it
 // down, which is the honest answer: the service is not on offer here and there
 // is no single change that would bring it back.
-export function availableWithPhrase(groups: AvailableWithGroup[]): string {
+export function availableWithPhrase(result: AvailableWith): string {
   let inSpent = false
-  const parts = groupPhrases(groups).map((phrase) => {
+  const parts = groupPhrases(result.groups).map((phrase) => {
     if (carriesOwnPreposition(phrase)) return phrase
     if (inSpent) return phrase
     inSpent = true
     return `in ${phrase}`
   })
-  return parts.length === 0 ? 'Not available on this choice' : `Available ${parts.join(' and ')}`
+  return parts.length === 0 ? 'Not available on this choice' : `Available ${parts.join(` ${result.join} `)}`
 }

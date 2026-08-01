@@ -28,6 +28,10 @@ const Body = z.object({
         // so a product page can cross them out and say where they are to be had
         // rather than hiding them.
         variantAlternatives: z.boolean().optional(),
+        // The variation options picked so far, which decide how those
+        // crossed-out services are worded (see EstimateItemInput). Presentation
+        // only - nothing is priced or promised from them.
+        chosenValueIds: z.array(z.string().min(1).max(100)).max(50).optional(),
       }),
     )
     .min(1)
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
     inputs.push({
       productId, tierKey: item.tierKey, quantity: item.quantity, ref: item.ref,
       variantFallback: item.variantFallback, variantAlternatives: item.variantAlternatives,
+      chosenValueIds: item.chosenValueIds,
     })
   }
 
