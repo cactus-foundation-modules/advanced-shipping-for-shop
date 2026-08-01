@@ -56,15 +56,17 @@ const css = `.ash-svc{margin-top:14px}
    same muted ink, so the two rows on a product page read as one language rather
    than two. Not a <button> and not a radio - there is nothing here to pick. */
 .ash-svc-off{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0.3375rem;margin-top:0.45rem}
-.ash-svc-off .scl-hints-t{align-self:center}
-.ash-svc .ash-svc-offchip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;
+/* The two lines are one statement - the service and where it is to be had - so
+   they sit as close as their own text allows: no gap between them, and a line
+   height just past the letters rather than the page's roomy default. */
+.ash-svc .ash-svc-offchip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0;line-height:1.15;
   white-space:normal;border-style:dashed;color:var(--color-text-muted);cursor:default;font-weight:500}
 /* The chip is inert, so it must not light up under the pointer the way a live
    switch chip does. */
 .ash-svc .ash-svc-offchip:hover{border-color:var(--color-border);background:var(--color-surface)}
 .ash-svc-offchip .ash-svc-strike{text-decoration:line-through;font-weight:600}
 .ash-svc-offchip .scl-hint-fee{color:var(--color-text-muted)}
-.ash-svc-note{font-size:0.6875rem;font-weight:500;color:var(--color-text-muted)}`
+.ash-svc-note{font-size:0.6875rem;font-weight:500;line-height:1.15;color:var(--color-text-muted)}`
 
 // Per-product, per-session: a pick survives a reload and a trip to another page
 // and back, but it is not a standing preference the shopper never agreed to.
@@ -256,7 +258,6 @@ export function DeliveryServicePicker({
         )}
         {others.length > 0 && (
           <div className="ash-svc-off">
-            <span className="scl-hints-t">Not on this choice:</span>
             {others.map((o) => (
               // The whole sentence rides on `title` as well as being printed:
               // the chip is narrow, the note wraps, and a shopper hovering the
