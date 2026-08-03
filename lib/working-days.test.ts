@@ -8,6 +8,7 @@ import {
   nextWorkingDay,
   todayInZone,
   weekdayOf,
+  workingDaysBetween,
 } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 
 const MON_FRI = [1, 2, 3, 4, 5]
@@ -70,6 +71,31 @@ describe('addWorkingDays', () => {
     expect(addWorkingDays('2026-07-24', 1, NONE, [1, 3])).toBe('2026-07-27') // -> Mon
     expect(addWorkingDays('2026-07-24', 2, NONE, [1, 3])).toBe('2026-07-29') // -> Wed
     expect(addWorkingDays('2026-07-29', 2, NONE, [1, 3])).toBe('2026-08-05') // Wed +2 -> Mon, Wed
+  })
+})
+
+describe('workingDaysBetween', () => {
+  it('is the exact inverse of addWorkingDays', () => {
+    const cases: Array<[string, number, Set<string>, number[]]> = [
+      ['2026-07-24', 1, NONE, MON_FRI],
+      ['2026-07-24', 3, NONE, MON_FRI],
+      ['2026-07-24', 12, NONE, MON_FRI],
+      ['2026-07-24', 1, new Set(['2026-07-27']), MON_FRI],
+      ['2026-07-24', 2, NONE, [1, 3]],
+      ['2026-07-29', 2, NONE, [1, 3]],
+    ]
+    for (const [from, days, holidays, shipDays] of cases) {
+      const to = addWorkingDays(from, days, holidays, shipDays)
+      expect(workingDaysBetween(from, to, holidays, shipDays)).toBe(days)
+    }
+  })
+  it('is zero for a date on or before the start', () => {
+    expect(workingDaysBetween('2026-07-24', '2026-07-24', NONE, MON_FRI)).toBe(0)
+    expect(workingDaysBetween('2026-07-24', '2026-07-20', NONE, MON_FRI)).toBe(0)
+  })
+  it('does not count the weekend it spans', () => {
+    // Friday to the Monday after is one working day, not three.
+    expect(workingDaysBetween('2026-07-24', '2026-07-27', NONE, MON_FRI)).toBe(1)
   })
 })
 

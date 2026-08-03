@@ -1,11 +1,11 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
   "requiresModules": [
-    { "name": "shop", "minVersion": "0.1.142" },
+    { "name": "shop", "minVersion": "0.1.169" },
     { "name": "product-attributes-for-shop", "minVersion": "0.1.27" }
   ],
   "requiredEnvVars": [],
@@ -31,6 +31,12 @@
       "id": "delivery",
       "import": "./lib/cart-summary",
       "component": "summariseCartDelivery"
+    },
+    {
+      "point": "shop.order-payment-state",
+      "id": "deferred-delivery",
+      "import": "./lib/order-payment-state",
+      "component": "restateDeliveryForPayment"
     },
     {
       "point": "shop.tax-shipping-tabs",

@@ -23,10 +23,18 @@ export type ComputeEstimateInput = {
   stock: StockState
 }
 
+// The days the shop actually ships on, defaulting to Mon-Fri when a shop has
+// nominated none. Exported because callers doing their own date maths off an
+// estimate (turning its date into a working-day count, say) have to use the very
+// same set or their answer disagrees with the estimate it came from.
+export function effectiveShipDays(timing: DispatchTiming): number[] {
+  return timing.shipDays.length > 0 ? timing.shipDays : [1, 2, 3, 4, 5]
+}
+
 export function computeEstimate(input: ComputeEstimateInput): DeliveryEstimate {
   const { now, timezone, holidays, timing, tier, stock } = input
   const today = todayInZone(now, timezone)
-  const shipDays = timing.shipDays.length > 0 ? timing.shipDays : [1, 2, 3, 4, 5]
+  const shipDays = effectiveShipDays(timing)
 
   const outOfStock = stock.trackInventory && (stock.stockCount ?? 0) <= 0
   // Out of stock and set to block: nothing to promise. A backorderable line

@@ -97,6 +97,36 @@ re-prices the line (the price is worked out server-side, never sent by the
 browser) and the chosen service and promised date are snapshotted onto the
 order line, so they are preserved exactly as quoted.
 
+## Orders that are paid for later
+
+A delivery date is counted from dispatch, and nothing is dispatched before it is
+paid for. On a method that takes the money at the checkout those are the same
+afternoon, so the date the basket promised stands. On a **pay-later method**
+(bank transfer, cash) they are not: the shopper can sit on it for a fortnight,
+and a receipt still reading "Delivery by Tuesday the 5th" is a promise nobody can
+keep.
+
+So on any payment method whose provider declares itself `confirmMode: 'manual'`:
+
+- **At the checkout**, picking that method adds a line under it saying delivery
+  dates start from the day the payment clears, and what the lead time on this
+  basket actually is.
+- **While the order is unpaid**, every line states its lead time instead of a
+  date - "Standard Delivery - 5 working days from when your payment reaches us" -
+  on the confirmation page, in the account's order history and in the admin.
+- **The moment the payment is confirmed**, every line is re-dated from the day
+  the money arrived and reads as a date again. The confirmation email, which only
+  goes out then, carries the new date rather than the old one.
+
+A pre-order line is left alone throughout: its date comes from the stock's own
+arrival, which payment does not move.
+
+Nothing here names bank transfer. It keys on the payment provider's own
+`confirmMode`, so a later method with the same shape is covered without a change,
+and every automatic method is untouched. It rides on shop's
+`shop.order-payment-state` seam, which shop calls when an order is placed and
+again when it is paid.
+
 ## Configuration
 
 No environment variables. Everything is configured in the admin. The weekly

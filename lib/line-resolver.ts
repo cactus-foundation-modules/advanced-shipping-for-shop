@@ -8,8 +8,9 @@ import type { CartLineResolution } from '@/modules/shop/lib/line-meta'
 import type { ShpProduct } from '@/modules/shop/lib/types'
 import { getShopConfigCached } from '@/modules/shop/lib/config'
 import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
-import { formatDeliveryDate, formatDeliveryByLabel, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
-import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate'
+import { formatDeliveryDate, formatDeliveryByLabel, todayInZone, workingDaysBetween } from '@/modules/advanced-shipping-for-shop/lib/working-days'
+import { computeEstimate, effectiveShipDays } from '@/modules/advanced-shipping-for-shop/lib/estimate'
+import { DELIVERY_FIELD_LABEL, DELIVERY_META_KEY, paidDeliveryValue, type DeliveryLineState } from '@/modules/advanced-shipping-for-shop/lib/deferred-delivery'
 import { findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { effectiveTierPrice, tierOptionLabel, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
@@ -142,12 +143,27 @@ export async function resolveShippingTierLineMeta(
     return { valid: false, priceAdjust, persistMeta: null, reason: est.reason ?? 'Unavailable', control }
   }
 
-  const dateLabel = est.targetDate ? formatDeliveryDate(est.targetDate) : null
   // On a per-person price, record the count the price was worked out from, so
   // the order line shows why the delivery cost what it did.
   const perPersonNote = tierOption.perPerson && delivery.perPersonCount ? ` (${delivery.perPersonCount} people)` : ''
   const tierText = `${tierOption.label}${perPersonNote}`
-  const fields = [{ label: 'Delivery', value: dateLabel ? `${tierText} - by ${dateLabel}` : tierText }]
+  const fields = [{ label: DELIVERY_FIELD_LABEL, value: est.targetDate ? paidDeliveryValue(tierText, est.targetDate) : tierText }]
+
+  // The same promise in machine-readable form, carried onto the order line so it
+  // can be restated later without anyone parsing the sentence above back apart.
+  // It earns its keep on a shop taking payment by bank transfer, where the date
+  // cannot be counted from today because nothing is dispatched until the money
+  // arrives - see lib/order-payment-state.ts. Harmless everywhere else: nothing
+  // reads it unless the order turns out to be on a pay-later method.
+  const state: DeliveryLineState | null = est.targetDate
+    ? {
+        tierKey: chosenKey,
+        tierText,
+        leadDays: workingDaysBetween(todayStr, est.targetDate, ctx.holidays, effectiveShipDays(settings)),
+        targetDate: est.targetDate,
+        isPreOrder: est.isPreOrder,
+      }
+    : null
 
   // Tell the basket how much of this line's price is the delivery service, so it
   // can show it on a line of its own under the goods rather than burying a £66
@@ -155,7 +171,13 @@ export async function resolveShippingTierLineMeta(
   // charge - the money is already in priceAdjust above.
   const charges = priceAdjust > 0 ? [{ label: 'Delivery', amount: priceAdjust }] : null
 
-  return { valid: true, priceAdjust, persistMeta: { fields }, control, charges }
+  return {
+    valid: true,
+    priceAdjust,
+    persistMeta: { fields, ...(state ? { data: { [DELIVERY_META_KEY]: state } } : {}) },
+    control,
+    charges,
+  }
 }
 
 // shop.cart-line-resolver-prefetch: resolve every cart product's delivery in one

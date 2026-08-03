@@ -122,6 +122,22 @@ export function addWorkingDays(dateStr: string, n: number, holidays: Set<string>
   return cursor
 }
 
+// How many working days `addWorkingDays` would need to get from `from` to `to` -
+// the exact inverse of it, so a date turned into a day count and back again lands
+// where it started. Counts the working days strictly after `from`, up to and
+// including `to`; a `to` on or before `from` is 0. Bounded like its inverse, so a
+// shop that ships on no day at all gives up rather than hangs.
+export function workingDaysBetween(from: string, to: string, holidays: Set<string>, shipDays: number[]): number {
+  if (to <= from) return 0
+  let cursor = from
+  let days = 0
+  for (let i = 0; i < 400 && cursor < to; i++) {
+    cursor = addCalendarDays(cursor, 1)
+    if (isWorkingDay(cursor, holidays, shipDays)) days++
+  }
+  return days
+}
+
 // "Friday 7th of August" - the storefront delivery-line format, spelled out in
 // full. Built from the calendar date's own parts (no timezone), so it reads the
 // same wherever it renders. This is the "arrives by" date: it is the one a
