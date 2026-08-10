@@ -7,15 +7,15 @@ import { ScopePicker, scopeRefLabel, type ScopeOptions } from '@/modules/advance
 const card = { border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-surface)', marginBottom: '1.25rem', overflow: 'hidden' } as const
 const cardPad = { padding: '1rem 1.25rem' } as const
 const field = { display: 'flex', flexDirection: 'column' as const, gap: '0.25rem', fontSize: '0.8125rem' }
-const legend = { fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--color-text-muted)', margin: '0 0 0.5rem' }
-const help = { color: 'var(--color-text-muted)', fontSize: '0.8125rem', margin: '0.375rem 0 0', lineHeight: 1.45 }
+const legend = { fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--color-text-secondary)', margin: '0 0 0.5rem' }
+const help = { color: 'var(--color-text-secondary)', fontSize: '0.8125rem', margin: '0.375rem 0 0', lineHeight: 1.45 }
 const num = { width: '5rem' }
 const EMPTY_OPTIONS: ScopeOptions = { suppliers: [], categories: [], rangeValues: [] }
 
 const pill = {
   fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: 999,
   border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)',
-  color: 'var(--color-text-muted)', whiteSpace: 'nowrap' as const,
+  color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' as const,
 } as const
 const pillAccent = {
   ...pill, border: '1px solid var(--color-primary)', color: 'var(--color-primary)',
@@ -94,7 +94,7 @@ export function TiersScreen() {
     <div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
-      <p style={{ color: 'var(--color-text-muted)', margin: '0 0 1.25rem', fontSize: '0.875rem', lineHeight: 1.5, maxWidth: '46rem' }}>
+      <p style={{ color: 'var(--color-text-secondary)', margin: '0 0 1.25rem', fontSize: '0.875rem', lineHeight: 1.5, maxWidth: '46rem' }}>
         Delivery services are the options a shopper picks for each item in their basket, such as
         <em> Standard delivery</em> or <em>Full installation</em>. Each service says how many working
         days it takes after dispatch (dispatch timing itself lives in Delivery settings) and what it
@@ -123,7 +123,7 @@ export function TiersScreen() {
                   <input className="form-control" value={newTier.label} placeholder="e.g. Full installation" onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} />
                 </label>
               </div>
-              <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional, shown to shoppers)</span>
+              <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(optional, shown to shoppers)</span>
                 <textarea
                   className="form-control"
                   rows={2}
@@ -156,7 +156,7 @@ export function TiersScreen() {
       </section>
 
       {tiers.length === 0 && (
-        <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '2rem 1rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', padding: '2rem 1rem' }}>
           No delivery services yet. Add your first one above to start offering delivery choices at checkout.
         </p>
       )}
@@ -206,7 +206,7 @@ function TierCard({
             <strong style={{ fontSize: '0.9375rem' }}>{tier.label}</strong>
           </div>
           {tier.description && (
-            <p style={{ margin: '0 0 0.375rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tier.description}</p>
+            <p style={{ margin: '0 0 0.375rem', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{tier.description}</p>
           )}
           <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
             {chips.map((c, i) => (<span key={i} style={pillAccent}>{c}</span>))}
@@ -228,7 +228,7 @@ function TierCard({
                 <input className="form-control" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
               </label>
             </div>
-            <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional, shown to shoppers)</span>
+            <label style={{ ...field, marginTop: '0.75rem' }}>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(optional, shown to shoppers)</span>
               <textarea
                 className="form-control"
                 rows={2}
@@ -262,12 +262,12 @@ function TierCard({
             </p>
 
             {config.length === 0 ? (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>Not offered anywhere yet - add a price below to make this service available.</p>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '0 0 0.75rem' }}>Not offered anywhere yet - add a price below to make this service available.</p>
             ) : (
               <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', marginBottom: '0.875rem' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
                   <thead>
-                    <tr style={{ textAlign: 'left', color: 'var(--color-text-muted)', background: 'var(--color-surface)' }}>
+                    <tr style={{ textAlign: 'left', color: 'var(--color-text-secondary)', background: 'var(--color-surface)' }}>
                       <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Applies to</th>
                       <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Price</th>
                       <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }} aria-label="Actions" />
@@ -286,8 +286,8 @@ function TierCard({
                         </td>
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           {c.available
-                            ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-muted)' }}> per person</span>}</>
-                            : <span style={{ color: 'var(--color-text-muted)' }}>Not available</span>}
+                            ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-secondary)' }}> per person</span>}</>
+                            : <span style={{ color: 'var(--color-text-secondary)' }}>Not available</span>}
                         </td>
                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                           <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => send(`/api/m/advanced-shipping-for-shop/admin/tier-config/${c.id}`, 'DELETE')}>Remove</button>

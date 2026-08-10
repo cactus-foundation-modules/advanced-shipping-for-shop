@@ -61,7 +61,7 @@ export function HolidaysScreen() {
 
       <section style={card}>
         <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.5rem' }}>{regionLabel} bank holidays</h2>
-        <p style={{ color: 'var(--color-text-muted)', margin: '0 0 0.75rem', fontSize: '0.8125rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)', margin: '0 0 0.75rem', fontSize: '0.8125rem' }}>
           Fetched from the official gov.uk calendar and stored here so delivery dates never wait on the internet. Change the region on the Settings screen.
           {syncedAt ? ` Last refreshed ${new Date(syncedAt).toLocaleString('en-GB')}.` : ' Not imported yet.'}
         </p>
@@ -69,20 +69,20 @@ export function HolidaysScreen() {
           <button type="button" className="btn btn-primary" onClick={importHolidays} disabled={busy}>
             {busy ? 'Importing…' : 'Import / refresh now'}
           </button>
-          {note && <span role="status" style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>{note}</span>}
+          {note && <span role="status" style={{ color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>{note}</span>}
         </div>
       </section>
 
       <section style={card}>
         <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Upcoming closed days ({upcoming.length})</h2>
         {upcoming.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>No upcoming holidays stored. Import the calendar above.</p>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>No upcoming holidays stored. Import the calendar above.</p>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.375rem' }}>
             {upcoming.map((h) => (
               <li key={h.date} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontSize: '0.875rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.375rem' }}>
                 <span>{h.name}</span>
-                <span style={{ color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{formatDate(h.date)}</span>
+                <span style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(h.date)}</span>
               </li>
             ))}
           </ul>

@@ -97,7 +97,7 @@ export function SettingsScreen() {
     }
   }
 
-  if (!settings) return <p style={{ color: 'var(--color-text-muted)' }}>Loading…</p>
+  if (!settings) return <p style={{ color: 'var(--color-text-secondary)' }}>Loading…</p>
 
   const toggleShipDay = (n: number) => {
     setSettings({
@@ -111,7 +111,7 @@ export function SettingsScreen() {
   return (
     <div>
       {error && <p style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>{error}</p>}
-      {saved && !error && <p role="status" style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }}>Saved.</p>}
+      {saved && !error && <p role="status" style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>Saved.</p>}
 
       <form onSubmit={save}>
         <section style={card}>
@@ -149,7 +149,7 @@ export function SettingsScreen() {
               ))}
             </span>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             Shop-wide: orders in before the cut-off on a ship day start being prepared that day, and
             &ldquo;days to dispatch&rdquo; is how many working days preparing takes. Each delivery
             service then adds its own delivery time on top - set those on the Delivery services screen.
@@ -177,7 +177,7 @@ export function SettingsScreen() {
               ))}
             </select>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             Pick the product attribute that means &ldquo;range&rdquo;. A delivery service&rsquo;s prices
             and timings can then key on its values (Hyphen, Aero, and so on).
           </p>
@@ -199,7 +199,7 @@ export function SettingsScreen() {
               ))}
             </select>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             Pick the attribute whose value holds a number of people (a &ldquo;Seats&rdquo; attribute
             reading &ldquo;2 People&rdquo;, &ldquo;6 People&rdquo;). Any service price you tick as
             per-person on the Delivery services screen is then multiplied by that number. A product
@@ -222,7 +222,7 @@ export function SettingsScreen() {
               ))}
             </select>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             Import the calendar itself on the Holidays screen. Delivery dates always skip weekends and
             these bank holidays.
           </p>
@@ -244,7 +244,7 @@ export function SettingsScreen() {
               ))}
             </select>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             The service a product page shows before the shopper changes it in the basket. The default
             service is offered on every product, even where it has no price row (it is then included in
             the item price).
@@ -266,7 +266,7 @@ export function SettingsScreen() {
               <option value="radios">Radio buttons</option>
             </select>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.8125rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
             How the delivery-service picker appears on each basket line. The first option confirms the
             chosen service and its date in place, with every other service beside it as a one-click chip.
             A dropdown stays compact; radio buttons list every service.
