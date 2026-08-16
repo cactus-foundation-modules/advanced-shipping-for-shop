@@ -2,13 +2,20 @@
 // across a payment that has not happened yet.
 //
 // Shop calls this twice for a given order - when it is placed (and so first knows
-// which payment method it is on) and again when the money lands. Everything it
-// decides comes off the payment provider's own `confirmMode`: 'manual' means the
-// shop is not taking the money at the checkout, so the order can sit unpaid for
-// as long as the shopper likes. Bank transfer is the case that prompted this;
-// nothing here names it, because "cash on collection" has exactly the same
-// problem and any later method with the same shape will too. Every automatic
-// method returns null on the first line and costs nothing.
+// which payment method it is on) and again when the money lands. What it decides
+// comes off one fact and nothing else: has the money arrived. Not the payment
+// method, and not the provider's `confirmMode` - that was the first cut of this
+// and it was wrong. Instant Bank Pay is an 'auto' method whose payment is only
+// SUBMITTED at the checkout and collects a working day or two later, so an order
+// on it sits unpaid exactly like a bank transfer does while its lines promise a
+// date counted from a starting gun that has not fired. A card order is unpaid for
+// the seconds between the order row and the confirmation, gets the lead time for
+// those seconds, and is re-dated the moment it clears - which costs nothing and
+// is the honest answer for a payment that then fails.
+//
+// The checkout's sentence is the one thing still tied to `confirmMode`, because
+// that is about a job the shopper has to go and do rather than about when the
+// money lands.
 //
 // The wording and the maths live next door in lib/deferred-delivery.ts (pure, and
 // unit-tested); this file is the plumbing that fetches what they need.
@@ -33,10 +40,6 @@ import {
 export async function restateDeliveryForPayment(
   { order, items }: OrderPaymentStateInput,
 ): Promise<OrderPaymentStateResult | null> {
-  // Money taken at the checkout: the date the basket promised was counted from
-  // the right day, and nothing here has anything to add.
-  if (getPaymentProvider(order.paymentMethod)?.confirmMode !== 'manual') return null
-
   // Only lines this module actually promised something for. A basket of plain
   // products, or one ordered before this module was installed, carries no state
   // and is left exactly as it is.
@@ -55,8 +58,14 @@ export async function restateDeliveryForPayment(
     for (const { item, state } of ours) {
       fields.push({ itemId: item.id, fields: [{ label: DELIVERY_FIELD_LABEL, value: unpaidDeliveryValue(state) }] })
     }
+    // The checkout sentence, on the other hand, is only worth saying about a
+    // method that hands the shopper a job. On card, or on a bank payment
+    // authorised there and then, telling them their dates start when the money
+    // clears is noise about a wait they are not being asked to do anything about.
     // The basket-wide figure is the longest lead in it - the day the whole order
     // has landed, which is the one the shopper is really waiting on.
+    const manual = getPaymentProvider(order.paymentMethod)?.confirmMode === 'manual'
+    if (!manual) return { items: fields }
     const longest = ours.reduce((max, row) => Math.max(max, row.state.leadDays), 0)
     return { items: fields, note: deferredPaymentNote(longest > 0 ? longest : null) }
   }
