@@ -147,7 +147,33 @@ export async function resolveShippingTierLineMeta(
   // the order line shows why the delivery cost what it did.
   const perPersonNote = tierOption.perPerson && delivery.perPersonCount ? ` (${delivery.perPersonCount} people)` : ''
   const tierText = `${tierOption.label}${perPersonNote}`
-  const fields = [{ label: DELIVERY_FIELD_LABEL, value: est.targetDate ? paidDeliveryValue(tierText, est.targetDate) : tierText }]
+  const deliveryValue = est.targetDate ? paidDeliveryValue(tierText, est.targetDate) : tierText
+  const fields = [{ label: DELIVERY_FIELD_LABEL, value: deliveryValue }]
+
+  // The same promise as a bucket shop can list the order by: everything landing
+  // on one day shown together, buckets running soonest first (the ISO date is
+  // both the identity and the sort). What a shopper is planning around is the
+  // day the van turns up, so the DATE alone makes the bucket - a flat-packed
+  // desk and a built chair landing on the same Tuesday are one delivery to them,
+  // whatever the warehouse calls them.
+  // Which leaves the service to be said in one of two places, and shop picks by
+  // comparing rather than composing: where every line in the bucket is on the
+  // same service the fuller sentence becomes the heading, and where they are not
+  // the heading states the date and each line names its own service underneath.
+  // `fieldLabel` then tells shop to stop printing the whole sentence under every
+  // product, which is what saying it once over the group is for.
+  // A shop too old to read a batch ignores it and shows the field per line as
+  // before.
+  const batch = est.targetDate
+    ? {
+        id: est.targetDate,
+        sort: est.targetDate,
+        heading: `Arrives by ${formatDeliveryDate(est.targetDate)}`,
+        uniformHeading: deliveryValue,
+        detail: tierText,
+        fieldLabel: DELIVERY_FIELD_LABEL,
+      }
+    : null
 
   // The same promise in machine-readable form, carried onto the order line so it
   // can be restated later without anyone parsing the sentence above back apart.
@@ -174,7 +200,7 @@ export async function resolveShippingTierLineMeta(
   return {
     valid: true,
     priceAdjust,
-    persistMeta: { fields, ...(state ? { data: { [DELIVERY_META_KEY]: state } } : {}) },
+    persistMeta: { fields, ...(batch ? { batch } : {}), ...(state ? { data: { [DELIVERY_META_KEY]: state } } : {}) },
     control,
     charges,
   }
