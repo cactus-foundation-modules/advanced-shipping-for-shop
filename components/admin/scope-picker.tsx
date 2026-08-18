@@ -5,6 +5,7 @@
 // value id - "range" in the code, "shipping attribute" on screen).
 // DEFAULT needs no reference.
 import type { ScopeType } from '@/modules/advanced-shipping-for-shop/lib/types'
+import { SearchableSelect } from '@/modules/advanced-shipping-for-shop/components/admin/searchable-select'
 
 export type ScopeOptions = {
   suppliers: string[]
@@ -70,12 +71,14 @@ export function ScopePicker({
         </select>
       )}
       {scopeType === 'RANGE' && (
-        <select className="form-control" style={{ flex: '1 1 12rem' }} value={scopeRef ?? ''} onChange={(e) => onChange('RANGE', e.target.value || null)} aria-label="Shipping attribute">
-          <option value="">Choose a shipping attribute…</option>
-          {options.rangeValues.map((v) => (
-            <option key={v.id} value={v.id}>{v.label}</option>
-          ))}
-        </select>
+        <SearchableSelect
+          style={{ flex: '1 1 12rem' }}
+          value={scopeRef || null}
+          options={options.rangeValues}
+          onChange={(id) => onChange('RANGE', id)}
+          placeholder="Choose a shipping attribute…"
+          ariaLabel="Shipping attribute"
+        />
       )}
     </div>
   )
