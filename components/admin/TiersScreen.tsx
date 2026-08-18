@@ -144,7 +144,7 @@ export function TiersScreen() {
                   <input className="form-control" style={num} type="number" min={0} value={newTier.minLeadDays ?? ''} placeholder="—" onChange={(e) => setNewTier({ ...newTier, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
                 </label>
               </div>
-              <p style={help}>Working days from dispatch to the shopper&rsquo;s door. Dispatch itself (cut-off time, days to pick and pack) is set once for the whole shop in Delivery settings. &ldquo;Never sooner than&rdquo; sets a floor in working days for services that need booking, like installation. You can give the service a different delivery time for one range or category when you add its price below.</p>
+              <p style={help}>Working days from dispatch to the shopper&rsquo;s door. Dispatch itself (cut-off time, days to pick and pack) is set once for the whole shop in Delivery settings. &ldquo;Never sooner than&rdquo; sets a floor in working days for services that need booking, like installation. You can give the service a different delivery time for one shipping attribute or category when you add its price below.</p>
             </fieldset>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
@@ -245,7 +245,7 @@ function TierCard({
                 <input className="form-control" style={num} type="number" min={0} value={draft.minLeadDays ?? ''} placeholder="—" onChange={(e) => setDraft({ ...draft, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
             </div>
-            <p style={help}>Working days from dispatch to the door. A price row below can give this service a different delivery time for just that range or category.</p>
+            <p style={help}>Working days from dispatch to the door. A price row below can give this service a different delivery time for just that shipping attribute or category.</p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem' }}>
               <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, description: draft.description.trim() || null, transitDays: draft.transitDays, minLeadDays: draft.minLeadDays })}>Save changes</button>
               <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Delete the "${tier.label}" service?`)) void send(base, 'DELETE') }}>Delete service</button>
@@ -256,8 +256,8 @@ function TierCard({
           <fieldset style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
             <legend style={legend}>Prices &amp; where it&rsquo;s offered</legend>
             <p style={{ ...help, marginTop: 0, marginBottom: '0.75rem' }}>
-              A service is offered wherever it has a price row, and the most specific one wins: a range
-              price beats a category price, which beats a supplier price, which beats the everywhere
+              A service is offered wherever it has a price row, and the most specific one wins: a
+              shipping-attribute price beats a category price, which beats a supplier price, which beats the everywhere
               price. No rows anywhere means the service is never offered.
             </p>
 

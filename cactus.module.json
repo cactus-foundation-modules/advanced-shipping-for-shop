@@ -1,6 +1,6 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
@@ -46,6 +46,15 @@
       "permission": "shop.manage",
       "import": "./components/admin/TiersScreen",
       "component": "TiersScreen"
+    },
+    {
+      "point": "shop.tax-shipping-tabs",
+      "id": "missing-shipping-rules",
+      "label": "Missing shipping rules",
+      "order": 25,
+      "permission": "shop.manage",
+      "import": "./components/admin/MissingRulesScreen",
+      "component": "MissingRulesScreen"
     },
     {
       "point": "shop.tax-shipping-tabs",

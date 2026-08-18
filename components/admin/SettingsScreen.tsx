@@ -164,22 +164,23 @@ export function SettingsScreen() {
         <section style={card}>
           <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>How prices match products</h2>
           <div style={rowStyle}>
-            <label htmlFor="ash-range">Range attribute</label>
+            <label htmlFor="ash-range">Shipping attribute</label>
             <select
               id="ash-range"
               className="form-control"
               value={settings.rangeAttributeId ?? ''}
               onChange={(e) => setSettings({ ...settings, rangeAttributeId: e.target.value || null })}
             >
-              <option value="">None - do not match on range</option>
+              <option value="">None - do not match on a shipping attribute</option>
               {options.attributes.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           </div>
           <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
-            Pick the product attribute that means &ldquo;range&rdquo;. A delivery service&rsquo;s prices
-            and timings can then key on its values (Hyphen, Aero, and so on).
+            Pick the product attribute a delivery service should key on - usually the one that
+            means &ldquo;range&rdquo;. A service&rsquo;s prices and timings can then be set per value
+            (Hyphen, Aero, and so on).
           </p>
         </section>
 

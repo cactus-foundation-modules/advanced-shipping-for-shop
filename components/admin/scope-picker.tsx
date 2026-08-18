@@ -1,7 +1,8 @@
 'use client'
 
 // Scope picker for delivery-service price rows: a scope-type select plus a
-// matching reference select (supplier name, category id, or range value id).
+// matching reference select (supplier name, category id, or shipping-attribute
+// value id - "range" in the code, "shipping attribute" on screen).
 // DEFAULT needs no reference.
 import type { ScopeType } from '@/modules/advanced-shipping-for-shop/lib/types'
 
@@ -15,7 +16,7 @@ const SCOPE_LABELS: Record<ScopeType, string> = {
   DEFAULT: 'Everything (default)',
   SUPPLIER: 'A supplier',
   CATEGORY: 'A category',
-  RANGE: 'A range',
+  RANGE: 'A shipping attribute',
 }
 
 export function ScopePicker({
@@ -69,8 +70,8 @@ export function ScopePicker({
         </select>
       )}
       {scopeType === 'RANGE' && (
-        <select className="form-control" style={{ flex: '1 1 12rem' }} value={scopeRef ?? ''} onChange={(e) => onChange('RANGE', e.target.value || null)} aria-label="Range">
-          <option value="">Choose a range…</option>
+        <select className="form-control" style={{ flex: '1 1 12rem' }} value={scopeRef ?? ''} onChange={(e) => onChange('RANGE', e.target.value || null)} aria-label="Shipping attribute">
+          <option value="">Choose a shipping attribute…</option>
           {options.rangeValues.map((v) => (
             <option key={v.id} value={v.id}>{v.label}</option>
           ))}
@@ -84,5 +85,5 @@ export function scopeRefLabel(scopeType: ScopeType, scopeRef: string | null, opt
   if (scopeType === 'DEFAULT') return 'Everything'
   if (scopeType === 'SUPPLIER') return scopeRef ?? '—'
   if (scopeType === 'CATEGORY') return options.categories.find((c) => c.id === scopeRef)?.name ?? '(deleted category)'
-  return options.rangeValues.find((v) => v.id === scopeRef)?.label ?? '(deleted range)'
+  return options.rangeValues.find((v) => v.id === scopeRef)?.label ?? '(deleted shipping attribute)'
 }

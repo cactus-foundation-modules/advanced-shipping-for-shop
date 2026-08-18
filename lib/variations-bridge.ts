@@ -161,3 +161,32 @@ export async function getVariantRangeValues(
   }
   return result
 }
+
+// shipping-attribute value id -> the parent listings whose ENABLED variations
+// carry that value, for the "Missing shipping rules" admin screen. Same reading
+// as getVariantRangeValues, turned the other way round and rolled up to the
+// listing, because the screen counts listings an owner would recognise rather
+// than hidden variant children. Empty when shop-variations is absent or the
+// range attribute drives no variation option.
+export async function getRangeValueParents(rangeAttributeId: string): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>()
+  if (!rangeAttributeId) return result
+  if (!(await hasVariantsTable())) return result
+  const rows = await prisma.$queryRaw<{ value_id: string; product_id: string }[]>`
+    SELECT DISTINCT ov."source_ref" AS value_id, v."product_id"
+    FROM "svr_variants" v
+    JOIN "svr_variant_values" vv ON vv."variant_id" = v."id"
+    JOIN "svr_option_values" ov ON ov."id" = vv."option_value_id"
+    JOIN "svr_options" o ON o."id" = ov."option_id"
+    WHERE o."source_provider" = ${ATTRIBUTE_OPTION_PROVIDER}
+      AND o."source_ref" = ${rangeAttributeId}
+      AND ov."source_ref" IS NOT NULL
+      AND v."enabled" = true
+  `
+  for (const r of rows) {
+    const set = result.get(r.value_id) ?? new Set<string>()
+    set.add(r.product_id)
+    result.set(r.value_id, set)
+  }
+  return result
+}

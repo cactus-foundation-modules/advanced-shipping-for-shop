@@ -46,12 +46,17 @@ A **Delivery** section in the admin sidebar:
 - **Delivery services** - the delivery-and-assembly options: name, shopper-facing
   description, delivery time, and per-scope prices (so Seating can cost - and
   take - differently from everything else).
+- **Missing shipping rules** - the values of the nominated shipping attribute no
+  delivery service prices, with a live-product count each, plus the values only
+  some services price. Read-only: it names the gaps, the Delivery services
+  screen fills them.
 - **Holidays** - imports the official gov.uk bank-holiday calendar for the chosen
   region and stores it, so date maths never waits on the internet. Refreshed
   weekly by a cron.
 - **Delivery settings** - the shop-wide dispatch timing (cut-off, days to
   dispatch, ship days, with a live "an order placed now" preview), which
-  attribute means "range", per-person pricing, the bank-holiday region
+  attribute is the **shipping attribute** (the one that usually means "range"),
+  per-person pricing, the bank-holiday region
   (England & Wales / Scotland / Northern Ireland), the default service and the
   basket picker style.
 
@@ -74,7 +79,7 @@ one is settled it shows only the services EVERY variation of that product
 offers, each costed and dated at its worst across them, so nothing shown can be
 withdrawn or dearer once they choose; as soon as a full combination is picked it
 re-asks for that exact variation. That matters on a catalogue where the delivery
-scope (the range attribute) is set on the variations rather than the listing -
+scope (the shipping attribute) is set on the variations rather than the listing -
 the listing itself resolves to no services at all, so without this the block
 would never appear. shop-variations announces the selection as a plain browser
 event (`cactus-shop-variant-selection`, latest detail on
