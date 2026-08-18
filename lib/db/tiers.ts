@@ -172,6 +172,33 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   tierConfigCache.invalidate()
 }
 
+// Edit a price row in place. Scope stays put - moving a price to a different
+// scope is what the upsert above is for - so only the numbers and switches
+// here. Undefined fields are left alone; null clears a timing override back to
+// "inherit the service's own".
+export async function updateTierConfig(
+  id: string,
+  patch: Partial<Omit<TierConfigInput, 'tierId' | 'scopeType' | 'scopeRef'>>,
+): Promise<void> {
+  const sets: Prisma.Sql[] = []
+  if (patch.available !== undefined) sets.push(Prisma.sql`"available" = ${patch.available}`)
+  if (patch.price !== undefined) sets.push(Prisma.sql`"price" = ${patch.price}`)
+  if (patch.perPerson !== undefined) sets.push(Prisma.sql`"per_person" = ${patch.perPerson}`)
+  if (patch.transitDays !== undefined) sets.push(Prisma.sql`"transit_days" = ${patch.transitDays}`)
+  if (patch.minLeadDays !== undefined) sets.push(Prisma.sql`"min_lead_days" = ${patch.minLeadDays}`)
+  if (sets.length === 0) return
+  sets.push(Prisma.sql`"updated_at" = CURRENT_TIMESTAMP`)
+  await prisma.$executeRaw`UPDATE "ash_tier_scope_config" SET ${Prisma.join(sets, ', ')} WHERE "id" = ${id}`
+  tierConfigCache.invalidate()
+}
+
+export async function getTierConfig(id: string): Promise<TierScopeConfig | null> {
+  const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
+    SELECT * FROM "ash_tier_scope_config" WHERE "id" = ${id} LIMIT 1
+  `
+  return rows[0] ? mapConfig(rows[0]) : null
+}
+
 export async function deleteTierConfig(id: string): Promise<void> {
   await prisma.$executeRaw`DELETE FROM "ash_tier_scope_config" WHERE "id" = ${id}`
   tierConfigCache.invalidate()

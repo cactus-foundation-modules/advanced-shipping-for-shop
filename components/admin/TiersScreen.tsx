@@ -174,6 +174,123 @@ export function TiersScreen() {
   )
 }
 
+// One price row: reads as a plain line until you hit Edit, then unfolds into the
+// same fields the "add a price" box has, minus where it applies - moving a price
+// somewhere else is a remove and an add, because the scope is the row's identity.
+function PriceRow({
+  config: c, options, busy, send,
+}: {
+  config: TierScopeConfig
+  options: ScopeOptions
+  busy: boolean
+  send: (url: string, method: string, body?: unknown) => Promise<boolean>
+}) {
+  const asDraft = () => ({
+    price: Number(c.price),
+    available: c.available,
+    perPerson: c.perPerson,
+    transitDays: c.transitDays,
+    minLeadDays: c.minLeadDays,
+  })
+  const hasTiming = c.transitDays != null || c.minLeadDays != null
+
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(asDraft)
+  const [customTiming, setCustomTiming] = useState(hasTiming)
+
+  const url = `/api/m/advanced-shipping-for-shop/admin/tier-config/${c.id}`
+  const chips = overrideChips(c)
+
+  function startEditing() {
+    setDraft(asDraft())
+    setCustomTiming(hasTiming)
+    setEditing(true)
+  }
+
+  async function save() {
+    const ok = await send(url, 'PATCH', {
+      price: draft.price,
+      available: draft.available,
+      perPerson: draft.perPerson,
+      transitDays: customTiming ? draft.transitDays : null,
+      minLeadDays: customTiming ? draft.minLeadDays : null,
+    })
+    if (ok) setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <tr style={{ borderTop: '1px solid var(--color-border)' }}>
+        <td style={{ padding: '0.5rem 0.75rem' }}>
+          {scopeRefLabel(c.scopeType, c.scopeRef, options)}
+          {chips.length > 0 && (
+            <span style={{ display: 'inline-flex', gap: '0.25rem', flexWrap: 'wrap', marginLeft: '0.5rem', verticalAlign: 'middle' }}>
+              {chips.map((chip, i) => (<span key={i} style={pillAccent}>{chip}</span>))}
+            </span>
+          )}
+        </td>
+        <td style={{ padding: '0.5rem 0.75rem' }}>
+          {c.available
+            ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-secondary)' }}> per person</span>}</>
+            : <span style={{ color: 'var(--color-text-secondary)' }}>Not available</span>}
+        </td>
+        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={startEditing}>Edit</button>
+          {' '}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Remove the price for ${scopeRefLabel(c.scopeType, c.scopeRef, options)}?`)) void send(url, 'DELETE') }}>Remove</button>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <tr style={{ borderTop: '1px solid var(--color-border)' }}>
+      <td colSpan={3} style={{ padding: '0.75rem', background: 'var(--color-surface)' }}>
+        <p style={{ margin: '0 0 0.625rem', fontSize: '0.8125rem' }}>
+          Editing the price for <strong>{scopeRefLabel(c.scopeType, c.scopeRef, options)}</strong>
+          <span style={{ color: 'var(--color-text-secondary)' }}> - to move it somewhere else, remove it and add a new one.</span>
+        </p>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label style={field}>Price (£)
+            <input className="form-control" style={{ width: '6rem' }} type="number" min={0} step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
+            <input type="checkbox" checked={draft.available} onChange={(e) => setDraft({ ...draft, available: e.target.checked })} /> Available here
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
+            <input type="checkbox" checked={draft.perPerson} onChange={(e) => setDraft({ ...draft, perPerson: e.target.checked })} /> Per person
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this service different timing where this price applies, instead of its usual timing.">
+            <input
+              type="checkbox"
+              checked={customTiming}
+              onChange={(e) => {
+                setCustomTiming(e.target.checked)
+                if (!e.target.checked) setDraft({ ...draft, transitDays: null, minLeadDays: null })
+              }}
+            /> Different timing here
+          </label>
+          {customTiming && (
+            <div style={{ flexBasis: '100%', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={field}>Working days to deliver
+                <input className="form-control" style={num} type="number" min={0} placeholder="—" value={draft.transitDays ?? ''} onChange={(e) => setDraft({ ...draft, transitDays: e.target.value === '' ? null : Number(e.target.value) })} />
+              </label>
+              <label style={field}>Never sooner than
+                <input className="form-control" style={num} type="number" min={0} placeholder="—" value={draft.minLeadDays ?? ''} onChange={(e) => setDraft({ ...draft, minLeadDays: e.target.value === '' ? null : Number(e.target.value) })} />
+              </label>
+              <p style={{ ...help, flexBasis: '100%', margin: 0 }}>Only fill in what should differ - anything left blank keeps the service&rsquo;s usual timing. Set &ldquo;Never sooner than&rdquo; to 0 to lift the service&rsquo;s minimum here.</p>
+            </div>
+          )}
+          <div style={{ flexBasis: '100%', display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void save()}>Save price</button>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 function TierCard({
   tier, config, options, busy, send,
 }: {
@@ -275,24 +392,7 @@ function TierCard({
                   </thead>
                   <tbody>
                     {config.map((c) => (
-                      <tr key={c.id} style={{ borderTop: '1px solid var(--color-border)' }}>
-                        <td style={{ padding: '0.5rem 0.75rem' }}>
-                          {scopeRefLabel(c.scopeType, c.scopeRef, options)}
-                          {overrideChips(c).length > 0 && (
-                            <span style={{ display: 'inline-flex', gap: '0.25rem', flexWrap: 'wrap', marginLeft: '0.5rem', verticalAlign: 'middle' }}>
-                              {overrideChips(c).map((chip, i) => (<span key={i} style={pillAccent}>{chip}</span>))}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.5rem 0.75rem' }}>
-                          {c.available
-                            ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-secondary)' }}> per person</span>}</>
-                            : <span style={{ color: 'var(--color-text-secondary)' }}>Not available</span>}
-                        </td>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => send(`/api/m/advanced-shipping-for-shop/admin/tier-config/${c.id}`, 'DELETE')}>Remove</button>
-                        </td>
-                      </tr>
+                      <PriceRow key={c.id} config={c} options={options} busy={busy} send={send} />
                     ))}
                   </tbody>
                 </table>
