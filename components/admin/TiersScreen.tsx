@@ -83,6 +83,22 @@ export function TiersScreen() {
     } catch { setError('Something went wrong.'); return false } finally { setBusy(false) }
   }
 
+  // Move a service one place up or down. The whole running order goes to the
+  // server, not the pair that swapped - see reorderTiers. Shown moved straight
+  // away so the list does not lurch about while the request is in flight, and
+  // put back from the database if the write fails.
+  async function moveTier(index: number, delta: number) {
+    const target = index + delta
+    if (target < 0 || target >= tiers.length) return
+    const next = [...tiers]
+    const [moved] = next.splice(index, 1)
+    if (!moved) return
+    next.splice(target, 0, moved)
+    setTiers(next)
+    const ok = await send('/api/m/advanced-shipping-for-shop/admin/tiers/reorder', 'POST', { ids: next.map((t) => t.id) })
+    if (!ok) void load()
+  }
+
   async function addTier() {
     if (!newTier.label.trim()) { setError('Give the service a name.'); return }
     if (await send('/api/m/advanced-shipping-for-shop/admin/tiers', 'POST', { ...newTier, description: newTier.description.trim() || null })) {
@@ -160,7 +176,14 @@ export function TiersScreen() {
           No delivery services yet. Add your first one above to start offering delivery choices at checkout.
         </p>
       )}
-      {tiers.map((tier) => (
+      {tiers.length > 1 && (
+        <p style={{ ...help, margin: '0 0 0.75rem' }}>
+          The order below is the order a shopper sees the services in on every product. It
+          also settles what a product starts on where your default service (set in Delivery
+          settings) is not offered: the highest one that is. Use the arrows to move a service.
+        </p>
+      )}
+      {tiers.map((tier, i) => (
         <TierCard
           key={tier.id}
           tier={tier}
@@ -168,6 +191,9 @@ export function TiersScreen() {
           options={options}
           busy={busy}
           send={send}
+          canMoveUp={i > 0}
+          canMoveDown={i < tiers.length - 1}
+          onMove={(delta) => void moveTier(i, delta)}
         />
       ))}
     </div>
@@ -292,13 +318,16 @@ function PriceRow({
 }
 
 function TierCard({
-  tier, config, options, busy, send,
+  tier, config, options, busy, send, canMoveUp, canMoveDown, onMove,
 }: {
   tier: ServiceTier
   config: TierScopeConfig[]
   options: ScopeOptions
   busy: boolean
   send: (url: string, method: string, body?: unknown) => Promise<boolean>
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onMove: (delta: number) => void
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ label: tier.label, description: tier.description ?? '', transitDays: tier.transitDays, minLeadDays: tier.minLeadDays })
@@ -330,6 +359,30 @@ function TierCard({
             <span style={pill}>{priceSummary}</span>
           </div>
         </div>
+        {(canMoveUp || canMoveDown) && (
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={busy || !canMoveUp}
+              onClick={() => onMove(-1)}
+              aria-label={`Move ${tier.label} up`}
+              title="Move up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={busy || !canMoveDown}
+              onClick={() => onMove(1)}
+              aria-label={`Move ${tier.label} down`}
+              title="Move down"
+            >
+              ↓
+            </button>
+          </div>
+        )}
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           {open ? 'Done' : 'Edit'}
         </button>

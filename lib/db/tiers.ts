@@ -77,12 +77,20 @@ async function ensureUniqueKey(desired: string): Promise<string> {
 export async function createTier(input: TierInput): Promise<ServiceTier> {
   const id = randomUUID()
   const key = await ensureUniqueKey(input.key)
+  // A new service joins the BACK of the running order unless the caller says
+  // otherwise. Defaulting to 0 would have put it in front of everything the
+  // owner had already arranged.
+  const position = input.position ?? (
+    await prisma.$queryRaw<{ next: number }[]>`
+      SELECT COALESCE(MAX("position") + 1, 0)::int AS "next" FROM "ash_service_tiers"
+    `
+  )[0]?.next ?? 0
   await prisma.$executeRaw`
     INSERT INTO "ash_service_tiers" (
       "id", "key", "label", "description", "position", "transit_days",
       "min_lead_days", "created_at", "updated_at"
     ) VALUES (
-      ${id}, ${key}, ${input.label}, ${input.description}, ${input.position ?? 0},
+      ${id}, ${key}, ${input.label}, ${input.description}, ${position},
       ${input.transitDays}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
   `
@@ -103,6 +111,26 @@ export async function updateTier(id: string, patch: Partial<TierInput>): Promise
   if (sets.length === 0) return
   sets.push(Prisma.sql`"updated_at" = CURRENT_TIMESTAMP`)
   await prisma.$executeRaw`UPDATE "ash_service_tiers" SET ${Prisma.join(sets, ', ')} WHERE "id" = ${id}`
+  tiersCache.invalidate()
+}
+
+// Write the running order in one go: the caller sends every service id in the
+// order it wants them, and each row's position becomes its index. Whole-list
+// rather than swap-a-pair on purpose - every existing install has all its
+// services sitting on position 0 (nothing ever set it), so the first reorder has
+// to normalise the lot or the order would depend on created_at tie-breaks.
+// Unknown ids are simply not matched; ids left out keep the position they had.
+export async function reorderTiers(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  // The casts are load-bearing: bare parameters inside a VALUES list give
+  // Postgres nothing to infer from ("could not determine data type of parameter").
+  const rows = ids.map((id, i) => Prisma.sql`(${id}::text, ${i}::int)`)
+  await prisma.$executeRaw`
+    UPDATE "ash_service_tiers" t
+    SET "position" = v."position", "updated_at" = CURRENT_TIMESTAMP
+    FROM (VALUES ${Prisma.join(rows, ', ')}) AS v("id", "position")
+    WHERE t."id" = v."id"
+  `
   tiersCache.invalidate()
 }
 
