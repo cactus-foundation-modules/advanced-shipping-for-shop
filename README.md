@@ -57,8 +57,9 @@ A **Delivery** section in the admin sidebar:
   dispatch, ship days, with a live "an order placed now" preview), which
   attribute is the **shipping attribute** (the one that usually means "range"),
   per-person pricing, the bank-holiday region
-  (England & Wales / Scotland / Northern Ireland), the default service and the
-  basket picker style.
+  (England & Wales / Scotland / Northern Ireland), the default service, the
+  basket picker style, and whether a product page names the services the chosen
+  variation cannot have.
 
 ## The product page
 
@@ -85,6 +86,14 @@ would never appear. shop-variations announces the selection as a plain browser
 event (`cactus-shop-variant-selection`, latest detail on
 `window.__cactusVariantSelection`); this module listens for it without importing
 anything, so an install without variations is unaffected.
+
+Services the rest of the listing carries and the chosen variation does not are
+named beneath the live ones, greyed out, with the choice that does carry them -
+until a shop turns that off. **Services this choice cannot have** in Delivery
+settings (`ash_settings.show_unavailable_services`, on by default) decides it,
+and it is enforced server-side: with it off the estimate carries no
+`otherTiers`, so the extra variation queries are never run and the picker has
+nothing to draw.
 
 A choice made on the product page is remembered for that product for the rest of
 the browsing session, applied straight away to that product's basket line if it

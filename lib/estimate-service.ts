@@ -277,7 +277,12 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   //    the listing offers, whether or not this product resolved to anything. Here
   //    the item may BE a variation, so the listing is found by going up first.
   // Both are answered from one set of queries: the same children, resolved once.
-  const wantAlternatives = [...new Set(inputs.filter((i) => i.variantAlternatives).map((i) => i.productId))]
+  // The shop can turn the whole idea off (Delivery settings): a catalogue where
+  // naming what this variation cannot have is noise rather than an upsell. Off,
+  // no caller gets alternatives, and the queries they cost are never run.
+  const alternativesOffered = settings.showUnavailableServices
+  const wantsAlternatives = (i: EstimateItemInput) => Boolean(i.variantAlternatives) && alternativesOffered
+  const wantAlternatives = [...new Set(inputs.filter(wantsAlternatives).map((i) => i.productId))]
   const parentOf = wantAlternatives.length > 0 ? await getVariantParents(wantAlternatives) : new Map<string, string>()
   const listingOf = (productId: string) => parentOf.get(productId) ?? productId
   const needChildren = new Set<string>([
@@ -392,7 +397,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     // Worked out even for a product with no services of its own: a listing whose
     // variations agree on nothing still has services to tell the shopper about,
     // and "nothing at all" would be the one answer that is plainly wrong.
-    const otherTiers = input.variantAlternatives ? otherTiersFor(input.productId, delivery, shown, input.chosenValueIds) : undefined
+    const otherTiers = wantsAlternatives(input) ? otherTiersFor(input.productId, delivery, shown, input.chosenValueIds) : undefined
     if (!delivery || !tierOption) {
       const empty = EMPTY_ITEM(input.productId, ref, name)
       items.push(otherTiers?.length ? { ...empty, otherTiers } : empty)

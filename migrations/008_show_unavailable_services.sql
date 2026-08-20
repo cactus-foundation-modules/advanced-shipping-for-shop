@@ -1,0 +1,12 @@
+-- Advanced Shipping for Shop - product-page switch for the services a chosen
+-- variation cannot have.
+--
+-- A product page lists the delivery services somewhere in the listing that the
+-- variation in hand does not carry, greyed out with the choice that does carry
+-- them. Useful on a catalogue where the shopper is meant to trade up; noise on
+-- one where they are not. True keeps the long-standing behaviour, so an install
+-- that has been running with the chips sees no change on update.
+--
+-- 001 carries the column too for fresh installs, so this ALTER is a harmless
+-- no-op there. Idempotent, safe to re-run on every deploy.
+ALTER TABLE "ash_settings" ADD COLUMN IF NOT EXISTS "show_unavailable_services" BOOLEAN NOT NULL DEFAULT true;

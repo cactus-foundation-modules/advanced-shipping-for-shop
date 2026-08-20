@@ -13,6 +13,7 @@ const FALLBACK: AshSettings = {
   defaultTierKey: null,
   cartControlStyle: 'summary',
   perPersonAttributeId: null,
+  showUnavailableServices: true,
   cutoffTime: '12:00',
   dispatchLeadDays: 1,
   shipDays: DEFAULT_SHIP_DAYS,
@@ -39,6 +40,9 @@ function mapRow(r: Record<string, unknown>): AshSettings {
     defaultTierKey: (r.default_tier_key as string | null) ?? null,
     cartControlStyle: style && isCartControlStyle(style) ? style : 'summary',
     perPersonAttributeId: (r.per_person_attribute_id as string | null) ?? null,
+    // A row written before the column existed reads null, which is the same
+    // answer as "not set" - and the setting's default is on.
+    showUnavailableServices: r.show_unavailable_services !== false,
     cutoffTime: toCutoff(r.cutoff_time),
     dispatchLeadDays: r.dispatch_lead_days == null ? 1 : Math.max(0, Number(r.dispatch_lead_days)),
     shipDays: toShipDays(r.ship_days),
@@ -71,6 +75,7 @@ export async function updateSettings(input: {
   defaultTierKey?: string | null
   cartControlStyle?: string
   perPersonAttributeId?: string | null
+  showUnavailableServices?: boolean
   cutoffTime?: string
   dispatchLeadDays?: number
   shipDays?: number[]
@@ -79,18 +84,20 @@ export async function updateSettings(input: {
   const merged = { ...current, ...input }
   const region: HolidayRegion = isHolidayRegion(merged.holidayRegion) ? merged.holidayRegion : 'england-and-wales'
   const style: CartControlStyle = isCartControlStyle(merged.cartControlStyle) ? merged.cartControlStyle : 'summary'
+  const showUnavailable = merged.showUnavailableServices !== false
   const cutoff = toCutoff(merged.cutoffTime)
   const lead = Math.max(0, Math.trunc(merged.dispatchLeadDays))
   const shipDays = toShipDays(merged.shipDays)
   await prisma.$executeRaw`
-    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "cart_control_style", "per_person_attribute_id", "cutoff_time", "dispatch_lead_days", "ship_days", "updated_at")
-    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, ${style}, ${merged.perPersonAttributeId}, ${cutoff}, ${lead}, ${JSON.stringify(shipDays)}::jsonb, CURRENT_TIMESTAMP)
+    INSERT INTO "ash_settings" ("id", "range_attribute_id", "holiday_region", "default_tier_key", "cart_control_style", "per_person_attribute_id", "show_unavailable_services", "cutoff_time", "dispatch_lead_days", "ship_days", "updated_at")
+    VALUES ('singleton', ${merged.rangeAttributeId}, ${region}, ${merged.defaultTierKey}, ${style}, ${merged.perPersonAttributeId}, ${showUnavailable}, ${cutoff}, ${lead}, ${JSON.stringify(shipDays)}::jsonb, CURRENT_TIMESTAMP)
     ON CONFLICT ("id") DO UPDATE SET
       "range_attribute_id" = ${merged.rangeAttributeId},
       "holiday_region" = ${region},
       "default_tier_key" = ${merged.defaultTierKey},
       "cart_control_style" = ${style},
       "per_person_attribute_id" = ${merged.perPersonAttributeId},
+      "show_unavailable_services" = ${showUnavailable},
       "cutoff_time" = ${cutoff},
       "dispatch_lead_days" = ${lead},
       "ship_days" = ${JSON.stringify(shipDays)}::jsonb,

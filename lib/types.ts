@@ -49,6 +49,12 @@ export type AshSettings = DispatchTiming & {
   // for per-person service pricing (e.g. a "Seats" attribute reading "6
   // People"). Null when the shop does not price anything per person.
   perPersonAttributeId: string | null
+  // Whether a product page names the delivery services the chosen variation
+  // cannot have - the dead chips reading "Unavailable" with the choice that
+  // does carry the service. False drops them entirely, so the page shows only
+  // what this variation can actually be bought with. Default true, which is the
+  // behaviour every install had before the switch existed.
+  showUnavailableServices: boolean
 }
 
 // A purchasable delivery service. transitDays is the service's usual courier

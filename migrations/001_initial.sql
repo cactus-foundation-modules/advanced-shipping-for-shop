@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS "ash_settings" (
     -- Product attribute (pat_attributes.id) whose value carries the person count
     -- for per-person service pricing. Null = no per-person pricing.
     "per_person_attribute_id" TEXT,
+    -- Whether a product page names the delivery services the chosen variation
+    -- cannot have (greyed out, with the choice that does carry them).
+    "show_unavailable_services" BOOLEAN NOT NULL DEFAULT true,
     "cutoff_time" TEXT NOT NULL DEFAULT '12:00',
     "dispatch_lead_days" INTEGER NOT NULL DEFAULT 1,
     "ship_days" JSONB NOT NULL DEFAULT '[1, 2, 3, 4, 5]',

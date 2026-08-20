@@ -13,6 +13,7 @@ type Settings = {
   defaultTierKey: string | null
   cartControlStyle: CartControlStyle
   perPersonAttributeId: string | null
+  showUnavailableServices: boolean
   cutoffTime: string
   dispatchLeadDays: number
   shipDays: number[]
@@ -271,6 +272,28 @@ export function SettingsScreen() {
             How the delivery-service picker appears on each basket line. The first option confirms the
             chosen service and its date in place, with every other service beside it as a one-click chip.
             A dropdown stays compact; radio buttons list every service.
+          </p>
+        </section>
+
+        <section style={card}>
+          <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Product page delivery services</h2>
+          <div style={rowStyle}>
+            <label htmlFor="ash-show-unavailable">Services this choice cannot have</label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem' }}>
+              <input
+                id="ash-show-unavailable"
+                type="checkbox"
+                checked={settings.showUnavailableServices}
+                onChange={(e) => setSettings({ ...settings, showUnavailableServices: e.target.checked })}
+              />
+              Show them, greyed out
+            </label>
+          </div>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
+            A product page can name the delivery services the rest of the listing offers but the
+            chosen variation does not, greyed out and marked unavailable, with the choice that does
+            carry them. Untick to leave them out altogether, so the page shows only the services this
+            variation can actually be bought with.
           </p>
         </section>
 
