@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="module-art.webp" alt="Advanced Shipping for Shop" width="640" />
+</p>
+
 # Advanced Shipping for Shop
 
 Turns the shop's vague "within a few working days" into a concrete, live
