@@ -60,7 +60,7 @@ A **Delivery** section in the admin sidebar:
 - **Delivery settings** - the shop-wide dispatch timing (cut-off, days to
   dispatch, ship days, with a live "an order placed now" preview), which
   attribute is the **shipping attribute** (the one that usually means "range"),
-  per-person pricing, the bank-holiday region
+  the bank-holiday region
   (England & Wales / Scotland / Northern Ireland), the default service, the
   basket picker style, and whether a product page names the services the chosen
   variation cannot have.

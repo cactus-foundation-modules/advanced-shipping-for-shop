@@ -42,9 +42,7 @@ function candidates(items: ItemEstimate[]): Candidate[] {
   for (const item of items) {
     if (!item.hasEstimate || !item.ref || !item.tierKey) continue
     const current = item.tiers.find((t) => t.key === item.tierKey)
-    // An unpriceable current service (per-person with no count) has no baseline
-    // to quote a difference against, so the line sits the offers out.
-    if (!current || current.priceEffective == null) continue
+    if (!current) continue
     out.push({ ref: item.ref, current, tiers: item.tiers })
   }
   return out
@@ -103,12 +101,8 @@ function buildOffer(
     // Not offered here, or the same service the line is already on: the line is
     // untouched and keeps its current date on both sides of the comparison.
     if (!chosen || chosen.key === row.current.key) { after.push(row.current.targetDate); continue }
-    // An option that cannot be priced on this line cannot be offered on it -
-    // quoting a total the checkout would then disagree with is the one outcome
-    // worth refusing an offer over.
-    if (chosen.priceEffective == null) { after.push(row.current.targetDate); continue }
     changes.push({ ref: row.ref, tierKey: chosen.key })
-    extraCost += chosen.priceEffective - row.current.priceEffective!
+    extraCost += chosen.priceEffective - row.current.priceEffective
     after.push(chosen.targetDate)
   }
 
@@ -128,9 +122,9 @@ function buildOffer(
 function earliest(row: Candidate): Candidate['current'] | null {
   let best: Candidate['current'] | null = null
   for (const t of row.tiers) {
-    if (!t.targetDate || t.priceEffective == null) continue
+    if (!t.targetDate) continue
     if (!best) { best = t; continue }
-    if (t.targetDate < best.targetDate! || (t.targetDate === best.targetDate && t.priceEffective < best.priceEffective!)) best = t
+    if (t.targetDate < best.targetDate! || (t.targetDate === best.targetDate && t.priceEffective < best.priceEffective)) best = t
   }
   return best
 }
@@ -156,7 +150,6 @@ export function buildBasketOffers(items: ItemEstimate[], todayStr: string): Bask
   const offeredCount = new Map<string, number>()
   for (const row of rows) {
     for (const t of row.tiers) {
-      if (t.priceEffective == null) continue
       const seen = (offeredCount.get(t.key) ?? 0) + 1
       offeredCount.set(t.key, seen)
       if (seen === 1 && !sharedKeys.includes(t.key)) sharedKeys.push(t.key)

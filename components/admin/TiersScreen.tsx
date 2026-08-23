@@ -214,7 +214,6 @@ function PriceRow({
   const asDraft = () => ({
     price: Number(c.price),
     available: c.available,
-    perPerson: c.perPerson,
     transitDays: c.transitDays,
     minLeadDays: c.minLeadDays,
   })
@@ -237,7 +236,6 @@ function PriceRow({
     const ok = await send(url, 'PATCH', {
       price: draft.price,
       available: draft.available,
-      perPerson: draft.perPerson,
       transitDays: customTiming ? draft.transitDays : null,
       minLeadDays: customTiming ? draft.minLeadDays : null,
     })
@@ -257,7 +255,7 @@ function PriceRow({
         </td>
         <td style={{ padding: '0.5rem 0.75rem' }}>
           {c.available
-            ? <>£{c.price}{c.perPerson && <span style={{ color: 'var(--color-text-secondary)' }}> per person</span>}</>
+            ? <>£{c.price}</>
             : <span style={{ color: 'var(--color-text-secondary)' }}>Not available</span>}
         </td>
         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -282,9 +280,6 @@ function PriceRow({
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
             <input type="checkbox" checked={draft.available} onChange={(e) => setDraft({ ...draft, available: e.target.checked })} /> Available here
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
-            <input type="checkbox" checked={draft.perPerson} onChange={(e) => setDraft({ ...draft, perPerson: e.target.checked })} /> Per person
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this service different timing where this price applies, instead of its usual timing.">
             <input
@@ -332,9 +327,9 @@ function TierCard({
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ label: tier.label, description: tier.description ?? '', transitDays: tier.transitDays, minLeadDays: tier.minLeadDays })
   const [priceScope, setPriceScope] = useState<{
-    scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean; perPerson: boolean
+    scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean
     transitDays: number | null; minLeadDays: number | null
-  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, perPerson: false, transitDays: null, minLeadDays: null })
+  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, transitDays: null, minLeadDays: null })
   // Reveals the per-scope timing inputs; closing it clears them back to
   // "inherit the service's timing" so nothing is sent by accident.
   const [customTiming, setCustomTiming] = useState(false)
@@ -467,9 +462,6 @@ function TierCard({
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
                 <input type="checkbox" checked={priceScope.available} onChange={(e) => setPriceScope({ ...priceScope, available: e.target.checked })} /> Available here
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Multiply this price by the person count on each product (set the count attribute on the Delivery settings screen).">
-                <input type="checkbox" checked={priceScope.perPerson} onChange={(e) => setPriceScope({ ...priceScope, perPerson: e.target.checked })} /> Per person
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }} title="Give this service different timing where this price applies, instead of its usual timing.">
                 <input

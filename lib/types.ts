@@ -45,10 +45,6 @@ export type AshSettings = DispatchTiming & {
   holidaysSyncedAt: string | null
   defaultTierKey: string | null
   cartControlStyle: CartControlStyle
-  // Product attribute (pat_attributes.id) whose value carries the person count
-  // for per-person service pricing (e.g. a "Seats" attribute reading "6
-  // People"). Null when the shop does not price anything per person.
-  perPersonAttributeId: string | null
   // Whether a product page names the delivery services the chosen variation
   // cannot have - the dead chips reading "Unavailable" with the choice that
   // does carry the service. False drops them entirely, so the page shows only
@@ -71,9 +67,9 @@ export type ServiceTier = {
   minLeadDays: number | null
 }
 
-// Where a service is offered: per-scope price, per-person flag and optional
-// absolute timing overrides (NULL inherits the service's own). Absence of a
-// matching row IS the availability switch.
+// Where a service is offered: per-scope price and optional absolute timing
+// overrides (NULL inherits the service's own). Absence of a matching row IS the
+// availability switch.
 export type TierScopeConfig = {
   id: string
   tierId: string
@@ -81,7 +77,6 @@ export type TierScopeConfig = {
   scopeRef: string | null
   available: boolean
   price: string // decimal string, "10.00"
-  perPerson: boolean
   transitDays: number | null
   minLeadDays: number | null
 }

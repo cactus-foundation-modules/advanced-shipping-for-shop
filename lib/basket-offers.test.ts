@@ -4,7 +4,7 @@ import type { ItemEstimate } from '@/modules/advanced-shipping-for-shop/lib/esti
 
 const TODAY = '2026-08-03'
 
-type TierSpec = { key: string; label: string; price: number | null; date: string | null }
+type TierSpec = { key: string; label: string; price: number; date: string | null }
 
 function item(ref: string, chosen: string, tiers: TierSpec[], overrides: Partial<ItemEstimate> = {}): ItemEstimate {
   return {
@@ -23,7 +23,7 @@ function item(ref: string, chosen: string, tiers: TierSpec[], overrides: Partial
       key: t.key,
       label: t.label,
       description: null,
-      price: String(t.price ?? 0),
+      price: t.price.toFixed(2),
       priceEffective: t.price,
       targetDate: t.date,
       targetLabel: t.date,
@@ -90,27 +90,6 @@ describe('buildBasketOffers', () => {
       item('b', 'built', [STANDARD, BUILT]),
     ], TODAY)
     expect(offers.find((o) => o.id === 'tier:built')).toBeUndefined()
-  })
-
-  it('refuses to move a line onto a service it cannot price', () => {
-    const perPerson: TierSpec = { key: 'built', label: 'Built or installed for you', price: null, date: '2026-09-11' }
-    const offers = buildBasketOffers([
-      item('a', 'std', [STANDARD, perPerson]),
-      item('b', 'std', [STANDARD, perPerson]),
-    ], TODAY)
-    // Neither line can be quoted, so there is no offer at all rather than one
-    // whose total the checkout would then disagree with.
-    expect(offers.find((o) => o.id === 'tier:built')).toBeUndefined()
-  })
-
-  it('skips a line whose current service cannot be priced', () => {
-    const offers = buildBasketOffers([
-      item('a', 'std', [{ ...STANDARD, price: null }, FAST]),
-      item('b', 'std', [STANDARD, FAST]),
-    ], TODAY)
-    // Only line b has a baseline to compare against - one line is not a
-    // whole-order offer.
-    expect(offers).toEqual([])
   })
 
   it('ignores lines with no estimate or no basket row to write back to', () => {

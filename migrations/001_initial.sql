@@ -29,9 +29,6 @@ CREATE TABLE IF NOT EXISTS "ash_settings" (
     "default_tier_key" TEXT,
     -- 'dropdown' | 'radios': how the cart shows the per-line service picker.
     "cart_control_style" TEXT NOT NULL DEFAULT 'dropdown',
-    -- Product attribute (pat_attributes.id) whose value carries the person count
-    -- for per-person service pricing. Null = no per-person pricing.
-    "per_person_attribute_id" TEXT,
     -- Whether a product page names the delivery services the chosen variation
     -- cannot have (greyed out, with the choice that does carry them).
     "show_unavailable_services" BOOLEAN NOT NULL DEFAULT true,
@@ -80,9 +77,6 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "scope_ref" TEXT,
     "available" BOOLEAN NOT NULL DEFAULT true,
     "price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    -- When true the price is per person: multiplied by the count read off the
-    -- attribute nominated in ash_settings.per_person_attribute_id.
-    "per_person" BOOLEAN NOT NULL DEFAULT false,
     "transit_days" INTEGER,
     "min_lead_days" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

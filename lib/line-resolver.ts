@@ -19,7 +19,7 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
-// The wording and the per-person arithmetic live in lib/tier-labels.ts, which is
+// The wording and the pricing arithmetic live in lib/tier-labels.ts, which is
 // pure and so can be read by the storefront's client islands too (the product
 // page's own service picker shows the same options this resolver offers the
 // basket). Re-exported here because this file was their first home and the rest
@@ -78,7 +78,7 @@ export async function resolveShippingTierLineMeta(
   // the labels and the raw figure for `priceAdjust`.
   const taxDisplay = await resolveTaxDisplay()
   const adjustPrice = makeDisplayAdjuster(taxDisplay, product.taxClassId)
-  const shown = (price: number | null) => (price != null && adjustPrice ? adjustPrice(price) : price)
+  const shown = (price: number) => (adjustPrice ? adjustPrice(price) : price)
   const todayStr = todayInZone(ctx.now, ctx.timezone)
   const control = {
     key: 'shippingTier',
@@ -107,11 +107,11 @@ export async function resolveShippingTierLineMeta(
       })
       const byLabel = tEst.available && tEst.targetDate ? formatDeliveryByLabel(tEst.targetDate, todayStr) : null
       const dateLabel = tEst.available && tEst.targetDate ? formatDeliveryDate(tEst.targetDate) : null
-      const eff = effectiveTierPrice(t, delivery.perPersonCount)
+      const eff = effectiveTierPrice(t)
       return {
         value: t.key,
         label: tierOptionLabel(t.label, shown(eff), currencySymbol, byLabel),
-        priceAdjust: eff ?? 0,
+        priceAdjust: eff,
         description: t.description ?? undefined,
         // The same wording pre-split for the summary presentation. A shop too
         // old to read it ignores the field and renders from `label` as before.
@@ -127,15 +127,7 @@ export async function resolveShippingTierLineMeta(
       : settings.cartControlStyle === 'dropdown' ? ('select' as const) : ('summary' as const),
   }
 
-  // A per-person service on a line whose count could not be read cannot be
-  // priced, so the line is blocked (never silently mispriced) with a
-  // plain-English reason, exactly as the shop owner chose over falling back to
-  // a flat price.
-  const chosenPrice = effectiveTierPrice(tierOption, delivery.perPersonCount)
-  if (chosenPrice == null) {
-    return { valid: false, priceAdjust: 0, persistMeta: null, reason: 'Set the number of people for this item to price its delivery', control }
-  }
-  const priceAdjust = chosenPrice
+  const priceAdjust = effectiveTierPrice(tierOption)
 
   // An unavailable estimate (out of stock and set to block) fails the line, like
   // any other unbuyable line, carrying the reason.
@@ -143,10 +135,7 @@ export async function resolveShippingTierLineMeta(
     return { valid: false, priceAdjust, persistMeta: null, reason: est.reason ?? 'Unavailable', control }
   }
 
-  // On a per-person price, record the count the price was worked out from, so
-  // the order line shows why the delivery cost what it did.
-  const perPersonNote = tierOption.perPerson && delivery.perPersonCount ? ` (${delivery.perPersonCount} people)` : ''
-  const tierText = `${tierOption.label}${perPersonNote}`
+  const tierText = tierOption.label
   const deliveryValue = est.targetDate ? paidDeliveryValue(tierText, est.targetDate) : tierText
   const fields = [{ label: DELIVERY_FIELD_LABEL, value: deliveryValue }]
 

@@ -4,8 +4,7 @@
 //
 // One most-specific-wins stack: each service resolves to the first scope its
 // config rows match - range, else category (nearest ancestor), else supplier,
-// else default - and that row decides price, per-person flag and any timing
-// override. A service with no matching row is simply not offered. Where several
+// else default - and that row decides price and any timing override. A service with no matching row is simply not offered. Where several
 // rows match at equal specificity (a product carrying two range values, say)
 // the tiebreak picks the one giving the LATEST delivery, so the shop never
 // over-promises.
@@ -34,10 +33,8 @@ export type ResolvedTierOption = {
   key: string
   label: string
   description: string | null
-  price: string // decimal string - the BASE price; per-person multiplication is
-  // applied by the line resolver using the delivery's perPersonCount.
+  price: string // decimal string, "10.00"
   available: boolean
-  perPerson: boolean
   modifiers: ResolvedTier
 }
 
@@ -45,10 +42,6 @@ export type ProductDelivery = {
   productId: string
   stock: StockState
   tiers: ResolvedTierOption[]
-  // Person count read off the nominated count attribute for this line, or null
-  // when no attribute is nominated or its value carries no readable number. A
-  // per-person service on a line whose count is null is blocked, never mispriced.
-  perPersonCount: number | null
   // Stock per service, set only on the listing-wide preview a product page
   // builds out of a set of variations (see mergeVariantDeliveries). There the
   // service and the stock come from different variations - the slowest one
@@ -145,18 +138,6 @@ export function latestConfig(tier: ServiceTier, candidates: TierScopeConfig[]): 
   return best
 }
 
-// The person count carried by a nominated count-attribute value's label. The
-// label is free text the shop types ("6 People", "6", "6-seat bench"), so the
-// first whole number in it is taken as the count. Returns null when there is no
-// positive number to read, which blocks a per-person line rather than guessing.
-export function parsePersonCount(label: string | null | undefined): number | null {
-  if (!label) return null
-  const match = label.match(/\d+/)
-  if (!match) return null
-  const n = Number.parseInt(match[0], 10)
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
 function stockOf(row: ProductRow): StockState {
   return {
     trackInventory: row.track_inventory,
@@ -225,26 +206,6 @@ export async function resolveProductDeliveries(
     ? await getVariantRangeValues(ids, settings.rangeAttributeId)
     : new Map<string, string[]>()
 
-  // Person count per product for per-person service pricing, read the same way
-  // as the range attribute (variant children carry their own value in
-  // pat_product_values keyed by the child id). Only read when a count attribute
-  // is nominated. First readable number in the value label wins.
-  const countByProduct = new Map<string, number>()
-  if (settings.perPersonAttributeId) {
-    const countRows = await prisma.$queryRaw<{ product_id: string; label: string }[]>`
-      SELECT pv."product_id", av."label"
-      FROM "pat_product_values" pv
-      JOIN "pat_attribute_values" av ON av."id" = pv."value_id"
-      WHERE pv."product_id" IN (${Prisma.join(allIds)}) AND av."attribute_id" = ${settings.perPersonAttributeId}
-    `
-    for (const r of countRows) {
-      const n = parsePersonCount(r.label)
-      // A product may hold several values (one per variation helping); the
-      // largest readable count wins, so a line never under-charges.
-      if (n != null && n > (countByProduct.get(r.product_id) ?? 0)) countByProduct.set(r.product_id, n)
-    }
-  }
-
   // Category ancestry for every distinct master category in ONE recursive CTE
   // (this used to be one query per distinct category - a mixed cart paid a
   // round-trip per department). depth 0 is the category itself, rising towards
@@ -295,9 +256,6 @@ export async function resolveProductDeliveries(
       supplier: row.supplier ?? parentRow?.supplier ?? null,
     }
     const stock = stockOf(row)
-    // Count on the line's own product, else the parent's (a variation child
-    // carries its own count; a plain product carries it on itself).
-    const perPersonCount = countByProduct.get(row.id) ?? (parentRow ? countByProduct.get(parentRow.id) : undefined) ?? null
 
     // Each service's most-specific scope row for this product. A service with no
     // matching row is not offered - unless it is the shop's designated default
@@ -316,7 +274,6 @@ export async function resolveProductDeliveries(
         description: tier.description,
         price: winningConfig ? winningConfig.price : '0.00',
         available: true,
-        perPerson: winningConfig ? winningConfig.perPerson : false,
         modifiers: tierModifiers(tier, winningConfig),
       })
     }
@@ -326,7 +283,6 @@ export async function resolveProductDeliveries(
       productId: row.id,
       stock,
       tiers: tierOptions,
-      perPersonCount,
     })
   }
 

@@ -50,7 +50,7 @@ export function buildProductTierControl(
     options: item.tiers.map((t) => ({
       value: t.key,
       label: tierOptionLabel(t.label, t.priceEffective, currencySymbol, t.targetByLabel),
-      priceAdjust: t.priceEffective ?? 0,
+      priceAdjust: t.priceEffective,
       description: t.description ?? undefined,
       summary: tierOptionSummary(t.label, t.priceEffective, currencySymbol, t.targetByLabel, t.targetLabel),
     })),

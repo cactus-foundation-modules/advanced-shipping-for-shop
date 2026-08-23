@@ -12,7 +12,6 @@ type Settings = {
   holidayRegion: string
   defaultTierKey: string | null
   cartControlStyle: CartControlStyle
-  perPersonAttributeId: string | null
   showUnavailableServices: boolean
   cutoffTime: string
   dispatchLeadDays: number
@@ -182,30 +181,6 @@ export function SettingsScreen() {
             Pick the product attribute a delivery service should key on - usually the one that
             means &ldquo;range&rdquo;. A service&rsquo;s prices and timings can then be set per value
             (Hyphen, Aero, and so on).
-          </p>
-        </section>
-
-        <section style={card}>
-          <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Per-person pricing</h2>
-          <div style={rowStyle}>
-            <label htmlFor="ash-count-attr">Count attribute</label>
-            <select
-              id="ash-count-attr"
-              className="form-control"
-              value={settings.perPersonAttributeId ?? ''}
-              onChange={(e) => setSettings({ ...settings, perPersonAttributeId: e.target.value || null })}
-            >
-              <option value="">None - do not price per person</option>
-              {options.attributes.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
-          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.8125rem' }}>
-            Pick the attribute whose value holds a number of people (a &ldquo;Seats&rdquo; attribute
-            reading &ldquo;2 People&rdquo;, &ldquo;6 People&rdquo;). Any service price you tick as
-            per-person on the Delivery services screen is then multiplied by that number. A product
-            missing a readable number cannot be bought with a per-person service until one is set.
           </p>
         </section>
 

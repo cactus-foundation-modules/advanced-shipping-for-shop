@@ -52,10 +52,8 @@ export type TierOption = {
   label: string
   description: string | null
   price: string
-  // What this service would actually cost on THIS line - the base price, or
-  // base x people where it is priced per person. Null when it is per-person and
-  // no count could be read, which is the one case that cannot be priced.
-  priceEffective: number | null
+  // What this service would actually cost on THIS line.
+  priceEffective: number
   // When this service would land, worked out per service rather than only for
   // the chosen one, so a basket can offer "everything sooner" without a second
   // round-trip. Null when this service cannot promise a date on this line.
@@ -80,7 +78,7 @@ export type UnavailableTierOption = {
   // Dearest across the variations that DO offer it, on the same "never in the
   // best light" footing as the listing preview: a figure the shopper is shown
   // before they can have the thing must not undercut what it will actually cost.
-  priceEffective: number | null
+  priceEffective: number
   // "Available in 160 to 180cm" - which choice carries it, worded here so the
   // product page and any other surface say it the same way.
   note: string
@@ -231,18 +229,12 @@ function mergeVariantDeliveries(parentProductId: string, children: ProductDelive
     const price = offering
       .map((c) => Number(c.tiers.find((t) => t.key === key)?.price ?? 0) || 0)
       .reduce((a, b) => Math.max(a, b), 0)
-    tiers.push({
-      ...base,
-      price: price.toFixed(2),
-      // Priced per person if ANY of them prices it that way - the shopper is
-      // told so rather than shown a flat figure that may not apply.
-      perPerson: offering.some((c) => c.tiers.find((t) => t.key === key)?.perPerson ?? false),
-    })
+    tiers.push({ ...base, price: price.toFixed(2) })
   }
 
   // The listing-level stock, for anything asking the delivery as a whole rather
   // than a service at a time: the slowest variation's, on the same footing.
-  return { productId: parentProductId, stock: slowest.stock, stockByTier, tiers, perPersonCount: slowest.perPersonCount }
+  return { productId: parentProductId, stock: slowest.stock, stockByTier, tiers }
 }
 
 // Which stock decides a given service's date. On a real product there is one
@@ -322,7 +314,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
   function otherTiersFor(
     productId: string,
     own: ProductDelivery | undefined,
-    shown: (p: number | null) => number | null,
+    shown: (p: number) => number,
     chosenValueIds: string[] | undefined,
   ): UnavailableTierOption[] {
     const childIds = childIdsByListing.get(listingOf(productId)) ?? []
@@ -337,17 +329,13 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
         if (ownKeys.has(tier.key) || seen.has(tier.key)) continue
         seen.add(tier.key)
         const offering = childIds.filter((id) => childDeliveries.get(id)?.tiers.some((t) => t.key === tier.key))
-        // Dearest across the variations that carry it; a per-person service on a
-        // variation with no readable count prices to null and is left unpriced
-        // rather than guessed, exactly as it is in the picker itself.
-        let price: number | null = 0
+        // Dearest across the variations that carry it, so a crossed-out service
+        // never undercuts what it would actually cost.
+        let price = 0
         for (const id of offering) {
-          const child = childDeliveries.get(id)
-          const match = child?.tiers.find((t) => t.key === tier.key)
-          if (!child || !match) continue
-          const effective = effectiveTierPrice(match, child.perPersonCount)
-          if (effective == null) { price = null; break }
-          price = Math.max(price ?? 0, effective)
+          const match = childDeliveries.get(id)?.tiers.find((t) => t.key === tier.key)
+          if (!match) continue
+          price = Math.max(price, effectiveTierPrice(match))
         }
         const groups = availableWithGroups(
           childOptionValues,
@@ -390,7 +378,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
     // the chosen service server-side - so it is converted to whichever side of
     // tax the shop prints on, at this product's own rate.
     const adjustPrice = makeDisplayAdjuster(taxDisplay, product?.taxClassId)
-    const shown = (price: number | null) => (price != null && adjustPrice ? adjustPrice(price) : price)
+    const shown = (price: number) => (adjustPrice ? adjustPrice(price) : price)
     const delivery = deliveries.get(input.productId)
     const tierKey = delivery ? chooseTier(delivery, input.tierKey, settings.defaultTierKey) : null
     const tierOption = delivery && tierKey ? findTierOption(delivery, tierKey) : null
@@ -447,7 +435,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
           // is the raw setting, not a figure any storefront prints. What IS
           // printed is `priceEffective` below, and that is converted.
           price: t.price,
-          priceEffective: shown(effectiveTierPrice(t, delivery.perPersonCount)),
+          priceEffective: shown(effectiveTierPrice(t)),
           targetDate: dated,
           targetLabel: dated ? formatDeliveryDate(dated) : null,
           targetByLabel: dated ? formatDeliveryByLabel(dated, todayStr) : null,

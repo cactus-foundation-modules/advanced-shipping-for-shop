@@ -18,7 +18,6 @@ const PatchBody = z.object({
   holidayRegion: z.enum(HOLIDAY_REGIONS.map((r) => r.id) as [string, ...string[]]).optional(),
   defaultTierKey: z.string().nullable().optional(),
   cartControlStyle: z.enum(['summary', 'dropdown', 'radios']).optional(),
-  perPersonAttributeId: z.string().nullable().optional(),
   showUnavailableServices: z.boolean().optional(),
   cutoffTime: z.string().regex(TIME_RE, 'Cut-off must be a 24-hour HH:MM time').optional(),
   dispatchLeadDays: z.number().int().min(0).max(365).optional(),

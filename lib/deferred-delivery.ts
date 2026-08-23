@@ -23,9 +23,9 @@ export type DeliveryLineState = {
   // The service the shopper bought, so a restatement re-dates that one and not
   // the shop's default.
   tierKey: string
-  // The service as it is named on the line, per-person note and all
-  // ("Full installation (6 people)") - the wording is settled at order time and
-  // never re-derived, so it cannot drift under a shopper who has already paid.
+  // The service as it is named on the line - the wording is settled at order
+  // time and never re-derived, so it cannot drift under a shopper who has
+  // already paid.
   tierText: string
   // Working days from the order to the date it was quoted: the promise itself,
   // independent of when the clock starts. What an unpaid line states, and the

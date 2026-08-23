@@ -9,7 +9,6 @@ import { deleteTierConfig, getTierConfig, updateTierConfig } from '@/modules/adv
 const ConfigPatch = z.object({
   available: z.boolean(),
   price: z.number().min(0).max(1_000_000),
-  perPerson: z.boolean(),
   transitDays: z.number().int().min(0).max(365).nullable(),
   minLeadDays: z.number().int().min(0).max(365).nullable(),
 }).partial()

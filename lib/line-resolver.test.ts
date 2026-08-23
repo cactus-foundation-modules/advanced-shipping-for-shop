@@ -2,36 +2,30 @@ import { describe, it, expect } from 'vitest'
 import { effectiveTierPrice, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/line-resolver'
 import type { ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 
-function opt(price: string, perPerson: boolean): ResolvedTierOption {
+function opt(price: string): ResolvedTierOption {
   return {
     key: 'full-install',
     label: 'Full installation',
     description: null,
     price,
     available: true,
-    perPerson,
     modifiers: { transitDays: 0, minLeadDays: null },
   }
 }
 
 describe('effectiveTierPrice', () => {
-  it('charges a flat service once, ignoring the count', () => {
-    expect(effectiveTierPrice(opt('50.00', false), 6)).toBe(50)
-    expect(effectiveTierPrice(opt('50.00', false), null)).toBe(50)
+  it('charges the service price once per line', () => {
+    expect(effectiveTierPrice(opt('50.00'))).toBe(50)
+    expect(effectiveTierPrice(opt('12.50'))).toBe(12.5)
   })
 
-  it('multiplies a per-person service by the count', () => {
-    expect(effectiveTierPrice(opt('50.00', true), 6)).toBe(300)
-    expect(effectiveTierPrice(opt('50.00', true), 2)).toBe(100)
-    expect(effectiveTierPrice(opt('12.50', true), 4)).toBe(50)
+  it('reads a free service as zero, and unreadable text as zero too', () => {
+    expect(effectiveTierPrice(opt('0.00'))).toBe(0)
+    expect(effectiveTierPrice(opt(''))).toBe(0)
   })
 
-  it('rounds a per-person total to the penny', () => {
-    expect(effectiveTierPrice(opt('9.99', true), 3)).toBe(29.97)
-  })
-
-  it('cannot price a per-person service with no readable count (blocks the line)', () => {
-    expect(effectiveTierPrice(opt('50.00', true), null)).toBeNull()
+  it('rounds to the penny', () => {
+    expect(effectiveTierPrice(opt('9.994'))).toBe(9.99)
   })
 })
 
@@ -52,10 +46,10 @@ describe('tierOptionSummary', () => {
   })
 
   it('falls back to the service name when there is no date to promise', () => {
-    const s = tierOptionSummary('Installed', null, '£', null, null)
+    const s = tierOptionSummary('Installed', 25.95, '£', null, null)
     expect(s.headline).toBe('Installed')
     expect(s.secondary).toBeUndefined()
     expect(s.switchLabel).toBe('Installed')
-    expect(s.priceLabel).toBe('Per person')
+    expect(s.priceLabel).toBe('+£25.95')
   })
 })

@@ -29,9 +29,9 @@ describe('unpaidDeliveryValue', () => {
   it('states the lead time and what starts it, never a date', () => {
     expect(unpaidDeliveryValue(STATE)).toBe('Standard Delivery - 5 working days from when your payment reaches us')
   })
-  it('keeps the per-person wording the order was placed with', () => {
-    expect(unpaidDeliveryValue({ ...STATE, tierText: 'Full installation (6 people)', leadDays: 10 }))
-      .toBe('Full installation (6 people) - 10 working days from when your payment reaches us')
+  it('keeps the service wording the order was placed with', () => {
+    expect(unpaidDeliveryValue({ ...STATE, tierText: 'Full installation', leadDays: 10 }))
+      .toBe('Full installation - 10 working days from when your payment reaches us')
   })
   it('says the plain thing when there is no lead to quote', () => {
     expect(unpaidDeliveryValue({ ...STATE, leadDays: 0 })).toBe('Standard Delivery - dispatched once your payment reaches us')

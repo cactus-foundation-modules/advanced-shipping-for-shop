@@ -1,9 +1,14 @@
-// A plain answer to "how long does this product take to arrive?", published at
-// the `shop.product-delivery-timing` extension point so any module needing
-// delivery timing can read it without becoming a dependent of this one - and,
-// just as importantly, without this module knowing who is asking. The Google
-// Shopping feed is the first caller; a printed quote or a courier export would
-// read exactly the same shape.
+// A plain answer to "how long does this product take to arrive, and what can it
+// be bought with?", published at the `shop.product-delivery-timing` extension
+// point so any module needing delivery facts can read them without becoming a
+// dependent of this one - and, just as importantly, without this module knowing
+// who is asking. The Google Shopping feed is the first caller; a printed quote
+// or a courier export would read exactly the same shape.
+//
+// The headline fields describe ONE service - the shop's default where the
+// product is offered it, else the first it is offered - and `options` carries
+// the whole menu beside them. Headline first because most callers want a single
+// honest answer; the menu is there for the ones publishing the choice.
 //
 // Two working-day counts rather than a date, deliberately. A date is only ever
 // true for the instant it was worked out, so a caller that caches its output
@@ -14,8 +19,26 @@ import { computeEstimate } from '@/modules/advanced-shipping-for-shop/lib/estima
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
 import { resolveProductDeliveries, findTierOption, type ProductDelivery, type ResolveContext, type ResolvedTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { effectiveTierPrice } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { cutoffInstant } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import type { AshSettings } from '@/modules/advanced-shipping-for-shop/lib/types'
+
+/** One delivery service the product can actually be bought with, priced and
+ *  timed. The whole menu the basket would offer, for a caller that wants to
+ *  publish the choice rather than just the headline. */
+export type ProductDeliveryOption = {
+  key: string
+  label: string
+  /** The shopper-facing sentence set on the service, where one is set. */
+  description: string | null
+  /** NET price in major units, on the same side of tax as a product's stored
+   *  price - the charge is folded into the line and taxed at the product's own
+   *  rate, so a caller printing it to a shopper must convert it exactly as it
+   *  converts that product's price. */
+  price: number
+  handlingDays: number
+  transitDays: number
+}
 
 export type ProductDeliveryTiming = {
   productId: string
@@ -32,6 +55,10 @@ export type ProductDeliveryTiming = {
    *  the shop has not got yet and the date is the whole point. Null otherwise,
    *  where the counts above already say everything there is to say. */
   availabilityDate: string | null
+  /** Every service the product is offered, the headline one included, in the
+   *  order the basket lists them. Never empty - a product with no service at
+   *  all is absent from the map entirely. */
+  options: ProductDeliveryOption[]
 }
 
 // Ids per round trip. A whole catalogue can be asked for at once - a feed asks
@@ -105,6 +132,15 @@ async function timingForChunk(
       if (est.available && est.dispatchDate) availabilityDate = availabilityInstant(est.dispatchDate, ctx.timezone)
     }
 
+    // Every service, priced the way the basket would price it for this product.
+    const options: ProductDeliveryOption[] = delivery.tiers.map((option) => ({
+      key: option.key,
+      label: option.label,
+      description: option.description,
+      price: effectiveTierPrice(option),
+      ...counts(settings, option),
+    }))
+
     out.set(productId, {
       productId,
       serviceKey: tier.key,
@@ -112,6 +148,7 @@ async function timingForChunk(
       handlingDays,
       transitDays,
       availabilityDate,
+      options,
     })
   }
 }

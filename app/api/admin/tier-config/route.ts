@@ -11,7 +11,6 @@ const ConfigBody = z.object({
   scopeRef: z.string().min(1).nullable(),
   available: z.boolean(),
   price: z.number().min(0).max(1_000_000),
-  perPerson: z.boolean().default(false),
   // Absolute per-scope timing overrides; null (the default) inherits the
   // service's own timing.
   transitDays: z.number().int().min(0).max(365).nullable().default(null),
