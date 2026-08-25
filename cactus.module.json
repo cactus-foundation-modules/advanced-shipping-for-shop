@@ -1,6 +1,6 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.47",
+  "version": "0.1.48",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.698",
@@ -43,6 +43,12 @@
       "id": "advanced-shipping",
       "import": "./lib/delivery-timing-provider",
       "component": "advancedShippingDeliveryTiming"
+    },
+    {
+      "point": "shop.card-media",
+      "id": "advanced-shipping-card-delivery",
+      "import": "./lib/card-delivery-provider",
+      "component": "advancedShippingCardDelivery"
     },
     {
       "point": "shop.tax-shipping-tabs",
@@ -113,6 +119,15 @@
       "rscComponent": "shopDeliveryBasketOffersPuckRscComponent",
       "rscImport": "./components/puck/ShopDeliveryBasketOffers.rsc",
       "layoutTypes": ["shopCart"]
+    },
+    {
+      "type": "ShopCardDelivery",
+      "import": "./components/puck/card-delivery",
+      "component": "shopCardDeliveryPuckComponent",
+      "rscComponent": "shopCardDeliveryPuckRscComponent",
+      "layoutTypes": [
+        "shopProductCard"
+      ]
     },
     {
       "type": "ShopDeliveryArrivals",

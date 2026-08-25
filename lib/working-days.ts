@@ -159,7 +159,10 @@ function ordinal(n: number): string {
 }
 
 // Whole calendar days from `a` to `b` (both "YYYY-MM-DD"), ignoring time of day.
-function calendarDaysBetween(a: string, b: string): number {
+// Exported because a caller turning an estimate's date into the number of days a
+// shopper would wait counts them the way a shopper does - weekends and bank
+// holidays included - and must not roll its own version of this sum.
+export function calendarDaysBetween(a: string, b: string): number {
   const [ay, am, ad] = ymd(a)
   const [by, bm, bd] = ymd(b)
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000)

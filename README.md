@@ -107,6 +107,36 @@ chosen service server-side exactly as it does for a choice made in the basket,
 and a service the added item is not actually offered falls back to the shop's
 default rather than being honoured.
 
+## Product cards
+
+Category, collection and filter-collection pages can carry the same promise in a
+line, without the shopper opening anything: **"Delivery in as little as 4 days."**,
+and **"Installation available."** after it where one of the services the product
+is offered is an installation one.
+
+Add **Card: Delivery** to the Product Card layout (admin > Layouts > Shop >
+Product Card), under the price. Every grid that stamps that card prints it -
+categories, collections, tags, filter collections, related and featured strips,
+search results - from the one placement.
+
+The figure is the soonest date any of the product's own delivery services could
+manage. "As little as" is a floor, deliberately: the exact date for the
+combination a shopper settles on is on the product page. A product no delivery
+service reaches, or one whose stock rules will not promise a date, prints
+nothing at all rather than a guess.
+
+Settings on the block:
+
+- **Wording** - `{days}` is the figure. Say "working days" instead if you would
+  rather, and switch **Count the days as** to match.
+- **Word that marks a service as installation**, and the **line to add** when one
+  is offered. A shop that calls it "Fitting" or "Assembly" says so here.
+- **Text size**, **colour** (from your site palette, with its own dark-mode
+  colour), **alignment**, and **space above / below**, set independently.
+- **Shrink the wording to fit on one line** - measures the card and takes the
+  type down to suit. It will not go below 8px; a sentence needing less than that
+  wraps as normal rather than being squeezed into nothing.
+
 ## The basket
 
 Each basket line shows its own delivery date and a **delivery-service picker**;

@@ -241,7 +241,7 @@ function mergeVariantDeliveries(parentProductId: string, children: ProductDelive
 // answer; on a listing-wide preview the service and the stock come from
 // whichever variation is slowest at THAT service, which is not always the same
 // one (see mergeVariantDeliveries).
-function stockFor(delivery: ProductDelivery, tierKey: string | null): StockState {
+export function stockFor(delivery: ProductDelivery, tierKey: string | null): StockState {
   return (tierKey ? delivery.stockByTier?.get(tierKey) : null) ?? delivery.stock
 }
 

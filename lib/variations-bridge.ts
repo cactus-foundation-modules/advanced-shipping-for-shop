@@ -190,3 +190,87 @@ export async function getRangeValueParents(rangeAttributeId: string): Promise<Ma
   }
   return result
 }
+
+// parent product id -> a handful of its variations that between them cover every
+// delivery answer the listing has, for a browse GRID.
+//
+// A product page asks about one listing and can afford to resolve all of its
+// variations (getVariantChildIds). A category page cannot: sixty listings of two
+// hundred variations each is twelve thousand products to resolve for sixty lines
+// of text, which measured at several seconds on a live catalogue.
+//
+// It does not need them. Delivery keys on the range value, the category and the
+// supplier, and a variation carries none of the last two - it inherits its
+// parent's. So every variation of a listing sharing a range value resolves to
+// exactly the same services, at the same prices, on the same timing. One of them
+// speaks for the lot, and a listing usually has just the one range value.
+//
+// Which one speaks matters only for stock, which is the one fact that does vary
+// between them - so the pick is ordered to hand back the variation that can be
+// delivered soonest: one that is actually purchasable ahead of one that is
+// blocked out of stock, stock ahead of pre-order, and the earliest promised
+// dispatch date among pre-orders. That makes the representative exact for
+// "soonest", not an approximation of it.
+//
+// The range value is read from BOTH places a variation can carry one: a
+// product-level attribute value on the child, and the child's own variation
+// selection where the range attribute drives an option (the two sources
+// getVariantRangeValues explains). Children carrying none at all group together
+// under NULL and get a representative of their own, since they resolve through
+// their parent's scope facts and so agree with each other too.
+export async function getRepresentativeVariants(
+  parentProductIds: string[],
+  rangeAttributeId: string | null,
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>()
+  if (parentProductIds.length === 0) return result
+  if (!(await hasVariantsTable())) return result
+
+  const ids = Prisma.join(parentProductIds)
+  // No nominated range attribute means nothing distinguishes one variation from
+  // another, so a single representative per listing answers for all of them.
+  const ranged = rangeAttributeId
+    ? Prisma.sql`
+        SELECT k.listing_id, k.child_id, pv."value_id"
+        FROM kids k
+        JOIN "pat_product_values" pv ON pv."product_id" = k.child_id
+        JOIN "pat_attribute_values" av ON av."id" = pv."value_id" AND av."attribute_id" = ${rangeAttributeId}
+        UNION
+        SELECT k.listing_id, k.child_id, ov."source_ref" AS "value_id"
+        FROM kids k
+        JOIN "svr_variant_values" vv ON vv."variant_id" = k.variant_id
+        JOIN "svr_option_values" ov ON ov."id" = vv."option_value_id"
+        JOIN "svr_options" o ON o."id" = ov."option_id"
+        WHERE o."source_provider" = ${ATTRIBUTE_OPTION_PROVIDER}
+          AND o."source_ref" = ${rangeAttributeId}
+          AND ov."source_ref" IS NOT NULL`
+    : Prisma.sql`SELECT k.listing_id, k.child_id, NULL::text AS "value_id" FROM kids k WHERE false`
+
+  const rows = await prisma.$queryRaw<{ listing_id: string; child_id: string }[]>`
+    WITH kids AS (
+      SELECT v."product_id" AS listing_id, v."child_product_id" AS child_id, v."id" AS variant_id
+      FROM "svr_variants" v
+      WHERE v."product_id" IN (${ids}) AND v."enabled" = true
+    ),
+    ranged AS (${ranged}),
+    tagged AS (
+      SELECT k.listing_id, k.child_id, r."value_id"
+      FROM kids k
+      LEFT JOIN ranged r ON r.child_id = k.child_id AND r.listing_id = k.listing_id
+    )
+    SELECT DISTINCT ON (t.listing_id, t."value_id") t.listing_id, t.child_id
+    FROM tagged t
+    JOIN "shp_products" p ON p."id" = t.child_id
+    ORDER BY t.listing_id, t."value_id",
+      (CASE WHEN p."track_inventory" AND COALESCE(p."stock_count", 0) <= 0 AND p."out_of_stock_behaviour" = 'BLOCK' THEN 1 ELSE 0 END),
+      (CASE WHEN p."is_pre_order" THEN 1 ELSE 0 END),
+      p."pre_order_dispatch_date" ASC NULLS FIRST,
+      t.child_id
+  `
+  for (const r of rows) {
+    const list = result.get(r.listing_id) ?? []
+    list.push(r.child_id)
+    result.set(r.listing_id, list)
+  }
+  return result
+}
