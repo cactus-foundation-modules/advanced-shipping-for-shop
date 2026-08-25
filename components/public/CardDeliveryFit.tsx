@@ -26,9 +26,7 @@
 // words than the card has room for, and a line nobody can read is worse than a
 // line that wraps, so past the floor it is left to wrap.
 import { useLayoutEffect, useRef, type CSSProperties } from 'react'
-
-/** The custom property the block's font size is multiplied by. */
-export const FIT_VAR = '--ash-card-fit'
+import { FIT_VAR } from '@/modules/advanced-shipping-for-shop/lib/card-delivery'
 
 const MIN_PX = 8
 // Type does not scale quite linearly (hinting and sub-pixel rounding), so one

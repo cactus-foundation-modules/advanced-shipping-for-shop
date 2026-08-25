@@ -37,6 +37,20 @@ export const DEFAULT_DELIVERY_TEXT = 'Delivery in as little as {days} days.'
 export const DEFAULT_INSTALLATION_TEXT = 'Installation available.'
 export const DEFAULT_INSTALLATION_MATCH = 'Installation'
 
+/** The custom property the "shrink to fit on one line" island multiplies the
+ *  block's own font size by (see components/public/CardDeliveryFit.tsx).
+ *
+ *  Lives here, in a plain module, rather than in that island's own file: every
+ *  export of a `'use client'` file becomes an opaque server reference when a
+ *  server component imports it, which is exactly right for the component
+ *  itself (rendered via JSX, the reference resolves at the client boundary)
+ *  and exactly wrong for a plain string a server component wants to read
+ *  directly - `card-delivery.tsx` builds `calc(<size> * var(${FIT_VAR}, 1))`
+ *  on the server, so `FIT_VAR` has to be a real value there, not a proxy that
+ *  throws "attempted to call FIT_VAR() from the server" the moment it is used
+ *  outside a render. */
+export const FIT_VAR = '--ash-card-fit'
+
 /** The delivery sentence with its figure filled in.
  *
  *  `{days}` is replaced by the number. One small courtesy on top: where the

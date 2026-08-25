@@ -19,12 +19,13 @@ import type { CSSProperties } from 'react'
 import { SiteColourField } from '@/lib/puck/SiteColourField'
 import type { CardPartContext } from '@/modules/shop/components/puck/parts/part-context'
 import { alignField, alignStyle } from '@/modules/advanced-shipping-for-shop/components/puck/block-fields'
-import { CardDeliveryFit, FIT_VAR } from '@/modules/advanced-shipping-for-shop/components/public/CardDeliveryFit'
+import { CardDeliveryFit } from '@/modules/advanced-shipping-for-shop/components/public/CardDeliveryFit'
 import {
   CARD_DELIVERY_FACT_ID,
   DEFAULT_DELIVERY_TEXT,
   DEFAULT_INSTALLATION_MATCH,
   DEFAULT_INSTALLATION_TEXT,
+  FIT_VAR,
   mentionsInstallation,
   renderDeliveryText,
   type CardDeliveryFacts,

@@ -1,157 +1,178 @@
 {
-  "name": "advanced-shipping-for-shop",
-  "version": "0.1.48",
-  "tablePrefix": "ash_",
-  "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
-  "requiresCoreVersion": "0.5.698",
-  "requiresModules": [
-    { "name": "shop", "minVersion": "0.1.169" },
-    { "name": "product-attributes-for-shop", "minVersion": "0.1.27" }
-  ],
-  "requiredEnvVars": [],
-  "permissions": [],
-  "navEntries": [],
-  "cookieCategories": [],
-  "settingsTabs": [],
-  "extensionPoints": [
-    {
-      "point": "shop.cart-line-resolver",
-      "id": "shipping-tier",
-      "import": "./lib/line-resolver",
-      "component": "resolveShippingTierLineMeta"
-    },
-    {
-      "point": "shop.cart-line-resolver-prefetch",
-      "id": "shipping-tier",
-      "import": "./lib/line-resolver",
-      "component": "prefetchShippingTierDeliveries"
-    },
-    {
-      "point": "shop.cart-summary",
-      "id": "delivery",
-      "import": "./lib/cart-summary",
-      "component": "summariseCartDelivery"
-    },
-    {
-      "point": "shop.order-payment-state",
-      "id": "deferred-delivery",
-      "import": "./lib/order-payment-state",
-      "component": "restateDeliveryForPayment"
-    },
-    {
-      "point": "shop.product-delivery-timing",
-      "id": "advanced-shipping",
-      "import": "./lib/delivery-timing-provider",
-      "component": "advancedShippingDeliveryTiming"
-    },
-    {
-      "point": "shop.card-media",
-      "id": "advanced-shipping-card-delivery",
-      "import": "./lib/card-delivery-provider",
-      "component": "advancedShippingCardDelivery"
-    },
-    {
-      "point": "shop.tax-shipping-tabs",
-      "id": "service-tiers",
-      "label": "Delivery services",
-      "order": 20,
-      "permission": "shop.manage",
-      "import": "./components/admin/TiersScreen",
-      "component": "TiersScreen"
-    },
-    {
-      "point": "shop.tax-shipping-tabs",
-      "id": "missing-shipping-rules",
-      "label": "Missing shipping rules",
-      "order": 25,
-      "permission": "shop.manage",
-      "import": "./components/admin/MissingRulesScreen",
-      "component": "MissingRulesScreen"
-    },
-    {
-      "point": "shop.tax-shipping-tabs",
-      "id": "holidays",
-      "label": "Holidays",
-      "order": 30,
-      "permission": "shop.manage",
-      "import": "./components/admin/HolidaysScreen",
-      "component": "HolidaysScreen"
-    },
-    {
-      "point": "shop.tax-shipping-tabs",
-      "id": "delivery-settings",
-      "label": "Delivery settings",
-      "order": 40,
-      "permission": "shop.manage",
-      "import": "./components/admin/SettingsScreen",
-      "component": "SettingsScreen"
-    }
-  ],
-  "puckBlocks": [
-    {
-      "type": "ShopDeliveryEstimate",
-      "import": "./components/puck/ShopDeliveryEstimate",
-      "component": "shopDeliveryEstimatePuckComponent",
-      "rscComponent": "shopDeliveryEstimatePuckRscComponent",
-      "rscImport": "./components/puck/ShopDeliveryEstimate.rsc",
-      "layoutTypes": ["shopProductDetail", "shopProduct"]
-    },
-    {
-      "type": "ShopShippingOptions",
-      "import": "./components/puck/ShopShippingOptions",
-      "component": "shopShippingOptionsPuckComponent",
-      "rscComponent": "shopShippingOptionsPuckRscComponent",
-      "rscImport": "./components/puck/ShopShippingOptions.rsc",
-      "layoutTypes": ["shopProductDetail", "shopProduct"]
-    },
-    {
-      "type": "ShopDeliveryCartSummary",
-      "import": "./components/puck/ShopDeliveryCartSummary",
-      "component": "shopDeliveryCartSummaryPuckComponent",
-      "rscComponent": "shopDeliveryCartSummaryPuckRscComponent",
-      "rscImport": "./components/puck/ShopDeliveryCartSummary.rsc",
-      "layoutTypes": ["shopCart"]
-    },
-    {
-      "type": "ShopDeliveryBasketOffers",
-      "import": "./components/puck/ShopDeliveryBasketOffers",
-      "component": "shopDeliveryBasketOffersPuckComponent",
-      "rscComponent": "shopDeliveryBasketOffersPuckRscComponent",
-      "rscImport": "./components/puck/ShopDeliveryBasketOffers.rsc",
-      "layoutTypes": ["shopCart"]
-    },
-    {
-      "type": "ShopCardDelivery",
-      "import": "./components/puck/card-delivery",
-      "component": "shopCardDeliveryPuckComponent",
-      "rscComponent": "shopCardDeliveryPuckRscComponent",
-      "layoutTypes": [
-        "shopProductCard"
-      ]
-    },
-    {
-      "type": "ShopDeliveryArrivals",
-      "import": "./components/puck/ShopDeliveryArrivals",
-      "component": "shopDeliveryArrivalsPuckComponent",
-      "rscComponent": "shopDeliveryArrivalsPuckRscComponent",
-      "rscImport": "./components/puck/ShopDeliveryArrivals.rsc",
-      "layoutTypes": ["shopCart"]
-    }
-  ],
-  "cronJobs": [
-    { "path": "/api/m/advanced-shipping-for-shop/cron/refresh-holidays", "schedule": "0 3 * * 1" }
-  ],
-  "memberExtensions": {
-    "activityTypes": [],
-    "notificationCategories": [],
-    "routeTiers": []
+ "name": "advanced-shipping-for-shop",
+ "version": "0.1.49",
+ "tablePrefix": "ash_",
+ "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
+ "requiresCoreVersion": "0.5.698",
+ "requiresModules": [
+  {
+   "name": "shop",
+   "minVersion": "0.1.169"
   },
-  "teardown": [
-    "ash_product_overrides",
-    "ash_tier_scope_config",
-    "ash_service_tiers",
-    "ash_delivery_rules",
-    "ash_holidays",
-    "ash_settings"
-  ]
+  {
+   "name": "product-attributes-for-shop",
+   "minVersion": "0.1.27"
+  }
+ ],
+ "requiredEnvVars": [],
+ "permissions": [],
+ "navEntries": [],
+ "cookieCategories": [],
+ "settingsTabs": [],
+ "extensionPoints": [
+  {
+   "point": "shop.cart-line-resolver",
+   "id": "shipping-tier",
+   "import": "./lib/line-resolver",
+   "component": "resolveShippingTierLineMeta"
+  },
+  {
+   "point": "shop.cart-line-resolver-prefetch",
+   "id": "shipping-tier",
+   "import": "./lib/line-resolver",
+   "component": "prefetchShippingTierDeliveries"
+  },
+  {
+   "point": "shop.cart-summary",
+   "id": "delivery",
+   "import": "./lib/cart-summary",
+   "component": "summariseCartDelivery"
+  },
+  {
+   "point": "shop.order-payment-state",
+   "id": "deferred-delivery",
+   "import": "./lib/order-payment-state",
+   "component": "restateDeliveryForPayment"
+  },
+  {
+   "point": "shop.product-delivery-timing",
+   "id": "advanced-shipping",
+   "import": "./lib/delivery-timing-provider",
+   "component": "advancedShippingDeliveryTiming"
+  },
+  {
+   "point": "shop.card-media",
+   "id": "advanced-shipping-card-delivery",
+   "import": "./lib/card-delivery-provider",
+   "component": "advancedShippingCardDelivery"
+  },
+  {
+   "point": "shop.tax-shipping-tabs",
+   "id": "service-tiers",
+   "label": "Delivery services",
+   "order": 20,
+   "permission": "shop.manage",
+   "import": "./components/admin/TiersScreen",
+   "component": "TiersScreen"
+  },
+  {
+   "point": "shop.tax-shipping-tabs",
+   "id": "missing-shipping-rules",
+   "label": "Missing shipping rules",
+   "order": 25,
+   "permission": "shop.manage",
+   "import": "./components/admin/MissingRulesScreen",
+   "component": "MissingRulesScreen"
+  },
+  {
+   "point": "shop.tax-shipping-tabs",
+   "id": "holidays",
+   "label": "Holidays",
+   "order": 30,
+   "permission": "shop.manage",
+   "import": "./components/admin/HolidaysScreen",
+   "component": "HolidaysScreen"
+  },
+  {
+   "point": "shop.tax-shipping-tabs",
+   "id": "delivery-settings",
+   "label": "Delivery settings",
+   "order": 40,
+   "permission": "shop.manage",
+   "import": "./components/admin/SettingsScreen",
+   "component": "SettingsScreen"
+  }
+ ],
+ "puckBlocks": [
+  {
+   "type": "ShopDeliveryEstimate",
+   "import": "./components/puck/ShopDeliveryEstimate",
+   "component": "shopDeliveryEstimatePuckComponent",
+   "rscComponent": "shopDeliveryEstimatePuckRscComponent",
+   "rscImport": "./components/puck/ShopDeliveryEstimate.rsc",
+   "layoutTypes": [
+    "shopProductDetail",
+    "shopProduct"
+   ]
+  },
+  {
+   "type": "ShopShippingOptions",
+   "import": "./components/puck/ShopShippingOptions",
+   "component": "shopShippingOptionsPuckComponent",
+   "rscComponent": "shopShippingOptionsPuckRscComponent",
+   "rscImport": "./components/puck/ShopShippingOptions.rsc",
+   "layoutTypes": [
+    "shopProductDetail",
+    "shopProduct"
+   ]
+  },
+  {
+   "type": "ShopDeliveryCartSummary",
+   "import": "./components/puck/ShopDeliveryCartSummary",
+   "component": "shopDeliveryCartSummaryPuckComponent",
+   "rscComponent": "shopDeliveryCartSummaryPuckRscComponent",
+   "rscImport": "./components/puck/ShopDeliveryCartSummary.rsc",
+   "layoutTypes": [
+    "shopCart"
+   ]
+  },
+  {
+   "type": "ShopDeliveryBasketOffers",
+   "import": "./components/puck/ShopDeliveryBasketOffers",
+   "component": "shopDeliveryBasketOffersPuckComponent",
+   "rscComponent": "shopDeliveryBasketOffersPuckRscComponent",
+   "rscImport": "./components/puck/ShopDeliveryBasketOffers.rsc",
+   "layoutTypes": [
+    "shopCart"
+   ]
+  },
+  {
+   "type": "ShopCardDelivery",
+   "import": "./components/puck/card-delivery",
+   "component": "shopCardDeliveryPuckComponent",
+   "rscComponent": "shopCardDeliveryPuckRscComponent",
+   "layoutTypes": [
+    "shopProductCard"
+   ]
+  },
+  {
+   "type": "ShopDeliveryArrivals",
+   "import": "./components/puck/ShopDeliveryArrivals",
+   "component": "shopDeliveryArrivalsPuckComponent",
+   "rscComponent": "shopDeliveryArrivalsPuckRscComponent",
+   "rscImport": "./components/puck/ShopDeliveryArrivals.rsc",
+   "layoutTypes": [
+    "shopCart"
+   ]
+  }
+ ],
+ "cronJobs": [
+  {
+   "path": "/api/m/advanced-shipping-for-shop/cron/refresh-holidays",
+   "schedule": "0 3 * * 1"
+  }
+ ],
+ "memberExtensions": {
+  "activityTypes": [],
+  "notificationCategories": [],
+  "routeTiers": []
+ },
+ "teardown": [
+  "ash_product_overrides",
+  "ash_tier_scope_config",
+  "ash_service_tiers",
+  "ash_delivery_rules",
+  "ash_holidays",
+  "ash_settings"
+ ]
 }
