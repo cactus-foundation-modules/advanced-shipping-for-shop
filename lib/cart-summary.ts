@@ -46,5 +46,5 @@ export async function summariseCartDelivery(lines: CartSummaryLine[]): Promise<C
   // Nothing in the basket has a delivery date - a downloads-only cart, say. No
   // note at all beats an empty one.
   if (!latest) return null
-  return { id: 'delivery', text: `everything by ${formatDeliveryByLabel(latest, todayInZone(ctx.now, ctx.timezone))}` }
+  return { id: 'delivery', text: `Everything gets to you by ${formatDeliveryByLabel(latest, todayInZone(ctx.now, ctx.timezone))}` }
 }
