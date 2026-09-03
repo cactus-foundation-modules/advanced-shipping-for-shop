@@ -12,11 +12,31 @@ function formatDate(iso: string): string {
   return new Date(Date.UTC(y!, m! - 1, d!, 12)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// A refresh time is a clock time, so it needs the shop's zone naming explicitly
+// - the browser's own is right only for an admin sitting in it.
+function formatStamp(iso: string, timezone: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date)
+  } catch {
+    return date.toISOString()
+  }
+}
+
 export function HolidaysScreen() {
   const [holidays, setHolidays] = useState<Holiday[]>([])
   const [regions, setRegions] = useState<Region[]>([])
   const [region, setRegion] = useState<string>('england-and-wales')
   const [syncedAt, setSyncedAt] = useState<string | null>(null)
+  // Both come from the server so this screen reads the shop's clock rather than
+  // the admin's own: "today" decides which holidays are still ahead, and the
+  // zone formats the refresh stamp.
+  const [timezone, setTimezone] = useState<string>('UTC')
+  const [today, setToday] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -30,6 +50,8 @@ export function HolidaysScreen() {
       setRegions(data.regions ?? [])
       setRegion(data.region ?? 'england-and-wales')
       setSyncedAt(data.syncedAt ?? null)
+      setTimezone(data.timezone ?? 'UTC')
+      setToday(data.today ?? '')
     } catch {
       setError('Could not load the holiday calendar.')
     }
@@ -53,7 +75,9 @@ export function HolidaysScreen() {
   }
 
   const regionLabel = regions.find((r) => r.id === region)?.label ?? region
-  const upcoming = holidays.filter((h) => h.date >= new Date().toISOString().slice(0, 10))
+  // Before the first load answers there is no shop date to compare against, so
+  // show the lot rather than silently hiding dates against the wrong clock.
+  const upcoming = today ? holidays.filter((h) => h.date >= today) : holidays
 
   return (
     <div>
@@ -63,7 +87,7 @@ export function HolidaysScreen() {
         <h2 style={{ fontSize: '0.9375rem', margin: '0 0 0.5rem' }}>{regionLabel} bank holidays</h2>
         <p style={{ color: 'var(--color-text-secondary)', margin: '0 0 0.75rem', fontSize: '0.8125rem' }}>
           Fetched from the official gov.uk calendar and stored here so delivery dates never wait on the internet. Change the region on the Settings screen.
-          {syncedAt ? ` Last refreshed ${new Date(syncedAt).toLocaleString('en-GB')}.` : ' Not imported yet.'}
+          {syncedAt ? ` Last refreshed ${formatStamp(syncedAt, timezone)}.` : ' Not imported yet.'}
         </p>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button type="button" className="btn btn-primary" onClick={importHolidays} disabled={busy}>

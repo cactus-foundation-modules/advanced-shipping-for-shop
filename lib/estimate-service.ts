@@ -121,6 +121,11 @@ export type GroupedDelivery = {
 export type EstimateResult = {
   items: ItemEstimate[]
   deliveries: GroupedDelivery[]
+  // "Today" in the SHOP's timezone, "YYYY-MM-DD". Every date in this result is
+  // worked out against it, so a caller that wants to word one relatively has to
+  // compare against the same day - the browser's own would be a different one
+  // for a shopper in another zone, and "tomorrow" would land on the wrong date.
+  today: string
   // Which picker the shop owner chose in Delivery settings, so a storefront
   // island can render the services the way the basket does without a settings
   // read of its own. Presentation only - nothing is priced from it.
@@ -463,5 +468,5 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
       tierLabels: [...bucket.tierLabels],
     }))
 
-  return { items, deliveries: deliveriesSummary, controlStyle: settings.cartControlStyle }
+  return { items, deliveries: deliveriesSummary, controlStyle: settings.cartControlStyle, today: todayStr }
 }

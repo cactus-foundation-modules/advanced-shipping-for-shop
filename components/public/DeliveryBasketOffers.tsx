@@ -67,11 +67,14 @@ export function DeliveryBasketOffers({ preview }: { preview?: boolean }) {
         }),
       })
       if (!res.ok) return
-      const data = (await res.json()) as { items: ItemEstimate[] }
-      // The estimate is worked out in the shop's timezone; the offers only need
-      // "today" to decide how chatty a date label can be, and the shopper's own
-      // day is the right one for that.
-      const today = new Intl.DateTimeFormat('en-CA').format(new Date())
+      const data = (await res.json()) as { items: ItemEstimate[]; today?: string }
+      // "Today" decides how chatty a date label is allowed to be ("tomorrow"
+      // rather than a date). It has to be the SHOP's today, because every date
+      // being labelled was worked out in the shop's timezone - a shopper whose
+      // own clock has already rolled over would otherwise be told "tomorrow"
+      // about a date that, to the shop, is today. Falls back to the browser's
+      // day only if an older estimate endpoint does not send one.
+      const today = data.today ?? new Intl.DateTimeFormat('en-CA').format(new Date())
       setOffers(buildBasketOffers(data.items ?? [], today))
     } catch {
       // Best-effort chrome - the row simply stays hidden if the estimate fails.
