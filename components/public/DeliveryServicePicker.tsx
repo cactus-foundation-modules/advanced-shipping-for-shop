@@ -140,10 +140,22 @@ export function DeliveryServicePicker({
   // string so it can be an effect dependency without re-firing on every render.
   const [chosenValueKey, setChosenValueKey] = useState('')
 
+  // Answers can land out of order, and the wrong one winning is not a cosmetic
+  // matter - it offers a shopper services their combination cannot have. A page
+  // whose options are settled from the URL asks twice in quick succession: about
+  // the LISTING on mount, because the variation islands have not published their
+  // selection yet, and about the settled VARIATION the moment they do. The
+  // listing's answer resolves every variation of it and is by far the slower of
+  // the two, so it lands second and painted all eight of a chair's services over
+  // the three the chosen colour actually carries. Every ask takes a number and
+  // only the newest one may answer.
+  const requestSeq = useRef(0)
+
   const slug = slugProp ?? (typeof window === 'undefined' ? null : slugFromLocation())
 
   const load = useCallback(async (tierKey: string | null, variantProductId: string | null, valueKey: string) => {
     if (!slug) return
+    const seq = ++requestSeq.current
     const chosenValueIds = valueKey ? valueKey.split('|') : undefined
     try {
       const res = await fetch('/api/m/advanced-shipping-for-shop/estimate', {
@@ -163,6 +175,9 @@ export function DeliveryServicePicker({
       })
       if (!res.ok) return
       const data = (await res.json()) as EstimateResponse
+      // A newer ask has been made since this one went out, so this answer is
+      // about a combination the shopper has already moved on from.
+      if (seq !== requestSeq.current) return
       const first = data.items?.[0] ?? null
       setItem(first)
       if (data.controlStyle) setStyle(data.controlStyle)
