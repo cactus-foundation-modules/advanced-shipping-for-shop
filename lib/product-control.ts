@@ -15,6 +15,7 @@ import type { CartLineControl } from '@/modules/shop/lib/line-meta'
 import type { ItemEstimate } from '@/modules/advanced-shipping-for-shop/lib/estimate-service'
 import type { CartControlStyle } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { tierOptionLabel, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
+import { taxViewAmount, type TaxViewSide } from '@/modules/shop/lib/tax-view-shared'
 
 // The shop owner's chosen basket picker, said the way shop's renderer names it.
 // Mirrors the cart-line resolver's own mapping, so "Delivery settings" moves
@@ -28,7 +29,7 @@ export function controlRenderAs(style: CartControlStyle): NonNullable<CartLineCo
 // Null when this product offers nothing to choose between - no services at all,
 // so there is no picker to show and the block renders nothing.
 export function buildProductTierControl(
-  item: Pick<ItemEstimate, 'hasEstimate' | 'tierKey' | 'tiers'>,
+  item: Pick<ItemEstimate, 'hasEstimate' | 'tierKey' | 'tiers' | 'taxView'>,
   currencySymbol: string,
   style: CartControlStyle,
   chosenKey?: string | null,
@@ -47,13 +48,28 @@ export function buildProductTierControl(
     // Every option states its own date and price, so shop renders the picker
     // bare - exactly as it does in the basket.
     optionsSelfLabelled: true,
-    options: item.tiers.map((t) => ({
-      value: t.key,
-      label: tierOptionLabel(t.label, t.priceEffective, currencySymbol, t.targetByLabel),
-      priceAdjust: t.priceEffective,
-      description: t.description ?? undefined,
-      summary: tierOptionSummary(t.label, t.priceEffective, currencySymbol, t.targetByLabel, t.targetLabel),
-    })),
+    options: item.tiers.map((t) => {
+      const { taxView } = item
+      // The priced wording on one side of tax, from the same helpers as the
+      // wording the page opens on, so the two can only differ by the figure.
+      const wordingOn = (side: TaxViewSide) => {
+        const price = taxView ? taxViewAmount(t.priceEffective, taxView, side) : t.priceEffective
+        return {
+          label: tierOptionLabel(t.label, price, currencySymbol, t.targetByLabel),
+          priceLabel: tierOptionSummary(t.label, price, currencySymbol, t.targetByLabel, t.targetLabel).priceLabel,
+        }
+      }
+      return {
+        value: t.key,
+        label: tierOptionLabel(t.label, t.priceEffective, currencySymbol, t.targetByLabel),
+        priceAdjust: t.priceEffective,
+        description: t.description ?? undefined,
+        summary: tierOptionSummary(t.label, t.priceEffective, currencySymbol, t.targetByLabel, t.targetLabel),
+        // Both sides where the shopper's VAT switch is on; shop's picker prints
+        // them and the stylesheet shows one.
+        ...(taxView ? { taxSides: { defaultSide: taxView.defaultSide, ex: wordingOn('ex'), inc: wordingOn('inc') } } : {}),
+      }
+    }),
     renderAs: controlRenderAs(style),
   }
 }

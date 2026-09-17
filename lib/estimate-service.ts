@@ -14,7 +14,8 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 import { getVariantChildIds, getVariantParents, getVariantOptionValues, type VariantOptionValue } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
 import { availableWithGroups, availableWithPhrase, childIdsInPlay } from '@/modules/advanced-shipping-for-shop/lib/tier-availability'
 import type { AshSettings, CartControlStyle, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
-import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
+import { makeDisplayAdjuster, productTaxView, resolveTaxDisplay } from '@/modules/shop/lib/tax-display'
+import type { ProductTaxView } from '@/modules/shop/lib/tax-view-shared'
 
 // `ref` is the caller's own handle on the item, echoed back untouched. The
 // basket needs it: two lines of the same product on different services are one
@@ -106,6 +107,11 @@ export type ItemEstimate = {
   // on a listing that has variations. Absent everywhere else, so no existing
   // reader has to learn about it.
   otherTiers?: UnavailableTierOption[]
+  // The shopper's with/without VAT switch at this product's rate, where the shop
+  // has it on (shop's lib/tax-view-shared.ts). Every `priceEffective` above is on
+  // the side the page opens on; a picker prints the other beside it. Absent
+  // where the switch is off and on an item with no estimate.
+  taxView?: ProductTaxView
 }
 
 // One arrival date the basket is waiting on, with the services and the items
@@ -130,6 +136,12 @@ export type EstimateResult = {
   // island can render the services the way the basket does without a settings
   // read of its own. Presentation only - nothing is priced from it.
   controlStyle: CartControlStyle
+}
+
+// Spread into an item only where the switch is on, so an item on a shop without
+// it carries no extra key at all.
+function withTaxView(taxView: ProductTaxView | null): { taxView?: ProductTaxView } {
+  return taxView ? { taxView } : {}
 }
 
 const EMPTY_ITEM = (productId: string, ref: string | null, name: string | null): ItemEstimate => ({
@@ -447,6 +459,7 @@ export async function estimateItems(inputs: EstimateItemInput[], now: Date = new
         }
       }),
       ...(otherTiers?.length ? { otherTiers } : null),
+      ...withTaxView(productTaxView(taxDisplay, product?.taxClassId)),
     })
 
     if (est.available && est.targetDate) {
