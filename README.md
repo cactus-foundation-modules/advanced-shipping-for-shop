@@ -175,6 +175,19 @@ and every automatic method is untouched. It rides on shop's
 `shop.order-payment-state` seam, which shop calls when an order is placed and
 again when it is paid.
 
+## The shop's orders list
+
+The shop's orders list shows **Delivery due** under each order's dispatch badge.
+For items not dispatched yet that day is the one this module promised at the
+checkout, read back off the order line through shop's
+`shop.order-line-due-date` seam (`lib/order-line-due-date.ts`). An unpaid line
+answers nothing, since it states a lead time rather than a date; a pre-order
+answers its stock's own date. When a payment re-dates a line, the new day is kept
+as `paidTargetDate` beside the quoted `targetDate`, so the list shows the day the
+customer was actually told. It works for orders placed before it existed too:
+the state it reads has been written onto every line since the service picker
+arrived.
+
 ## Configuration
 
 No environment variables. Everything is configured in the admin. The weekly

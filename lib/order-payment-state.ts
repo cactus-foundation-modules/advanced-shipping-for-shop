@@ -20,7 +20,6 @@
 // The wording and the maths live next door in lib/deferred-delivery.ts (pure, and
 // unit-tested); this file is the plumbing that fetches what they need.
 import type { OrderPaymentStateInput, OrderPaymentStateResult } from '@/modules/shop/lib/order-payment-state'
-import type { LineMetaField } from '@/modules/shop/lib/types'
 import { getPaymentProvider } from '@/modules/shop/lib/payments/registry'
 import { computeEstimate, effectiveShipDays } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { findTierOption } from '@/modules/advanced-shipping-for-shop/lib/resolve'
@@ -30,6 +29,7 @@ import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/s
 import { addWorkingDays, nextWorkingDay, todayInZone } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import {
   DELIVERY_FIELD_LABEL,
+  DELIVERY_META_KEY,
   deferredPaymentNote,
   paidDeliveryValue,
   readDeliveryLineState,
@@ -52,7 +52,7 @@ export async function restateDeliveryForPayment(
   if (ours.length === 0) return null
 
   const paid = order.paymentStatus === 'PAID'
-  const fields: Array<{ itemId: string; fields: LineMetaField[] }> = []
+  const fields: NonNullable<OrderPaymentStateResult['items']> = []
 
   if (!paid) {
     for (const { item, state } of ours) {
@@ -111,6 +111,10 @@ export async function restateDeliveryForPayment(
     fields.push({
       itemId: item.id,
       fields: [{ label: DELIVERY_FIELD_LABEL, value: paidDeliveryValue(state.tierText, targetDate) }],
+      // The new date kept as a date as well as a sentence, beside the quoted
+      // one rather than over it, so the orders list can say when the line is
+      // due without parsing it back out of the wording (lib/order-line-due-date.ts).
+      data: { [DELIVERY_META_KEY]: { ...state, paidTargetDate: targetDate } },
     })
   }
 

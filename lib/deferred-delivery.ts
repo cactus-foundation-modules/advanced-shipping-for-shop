@@ -33,6 +33,11 @@ export type DeliveryLineState = {
   leadDays: number
   // The date quoted when the order was placed, kept for the audit trail.
   targetDate: string
+  // The date the line was re-dated to when the money landed (see
+  // lib/order-payment-state.ts), which is the promise that stands from then on.
+  // Absent until then, and on every line paid before this was kept - where the
+  // quoted date is the best there is.
+  paidTargetDate?: string
   // A pre-order's date comes from the stock's own arrival, not from dispatch
   // timing, so payment does not move it and it is never restated as a lead time.
   isPreOrder: boolean
@@ -45,6 +50,7 @@ export function isDeliveryLineState(value: unknown): value is DeliveryLineState 
     && typeof v.tierText === 'string'
     && typeof v.leadDays === 'number'
     && typeof v.targetDate === 'string'
+    && (v.paidTargetDate === undefined || typeof v.paidTargetDate === 'string')
     && typeof v.isPreOrder === 'boolean'
 }
 
@@ -53,6 +59,18 @@ export function isDeliveryLineState(value: unknown): value is DeliveryLineState 
 export function readDeliveryLineState(data: Record<string, unknown> | undefined): DeliveryLineState | null {
   const raw = data?.[DELIVERY_META_KEY]
   return isDeliveryLineState(raw) ? raw : null
+}
+
+// The day a line is due at the customer's door, as its promise now stands, or
+// null when it has no date to give. A pre-order is due when its stock arrives,
+// paid or not. Anything else is counted from dispatch and nothing is dispatched
+// unpaid, so an unpaid line states a lead time rather than a date (see
+// unpaidDeliveryValue) and has no day to answer with. A paid one is due on the
+// day the payment re-dated it to, or the quoted day where it never was.
+export function lineDueDate(state: DeliveryLineState, paid: boolean): string | null {
+  if (state.isPreOrder) return state.targetDate
+  if (!paid) return null
+  return state.paidTargetDate ?? state.targetDate
 }
 
 // The label the order line's delivery field is filed under. Fixed, because it is

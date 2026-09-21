@@ -4,6 +4,7 @@ import {
   deferredPaymentNote,
   formatWorkingDays,
   isDeliveryLineState,
+  lineDueDate,
   paidDeliveryValue,
   readDeliveryLineState,
   unpaidDeliveryValue,
@@ -68,5 +69,23 @@ describe('readDeliveryLineState', () => {
     // and a partial one would produce a sentence with "undefined" in it.
     expect(isDeliveryLineState({ tierKey: 'standard' })).toBe(false)
     expect(readDeliveryLineState({ [DELIVERY_META_KEY]: { tierKey: 'standard', tierText: 'Standard' } })).toBeNull()
+  })
+})
+
+describe('lineDueDate', () => {
+  it('is the quoted day on a paid line that was never re-dated', () => {
+    expect(lineDueDate(STATE, true)).toBe('2026-07-31')
+  })
+  it('is the re-dated day once a payment has moved it', () => {
+    expect(lineDueDate({ ...STATE, paidTargetDate: '2026-08-04' }, true)).toBe('2026-08-04')
+  })
+  it('has no day for an unpaid line, which states a lead time instead', () => {
+    expect(lineDueDate(STATE, false)).toBeNull()
+  })
+  it("is a pre-order's own day whether or not it is paid", () => {
+    expect(lineDueDate({ ...STATE, isPreOrder: true }, false)).toBe('2026-07-31')
+  })
+  it('refuses a re-dated day that is not text', () => {
+    expect(isDeliveryLineState({ ...STATE, paidTargetDate: 20260804 })).toBe(false)
   })
 })
