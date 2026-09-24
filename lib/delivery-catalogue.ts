@@ -120,6 +120,19 @@ export type DeliveryCatalogue = {
    *  know it is making an approximation. */
   pricing: 'per-unit' | 'per-order'
   scopes: DeliveryScope[]
+  /** The attribute a RANGE scope's ref points into, so a consumer can tell
+   *  whether its own attribute-derived labels are the same strings.
+   *
+   *  A property of the whole catalogue rather than of one scope: every RANGE
+   *  scope in it names a value of this one attribute. Null where the shop has
+   *  not chosen one, in which case it has no RANGE scopes either.
+   *
+   *  Nothing here is a decision. It is published because a consumer that
+   *  labels products by an attribute of its own has no other way to know
+   *  whether its labels and these scope names are the same words - and the
+   *  honest answer to that question is the difference between a delivery price
+   *  that matches and one that quietly does not. */
+  rangeAttributeId: string | null
   services: DeliveryServiceEntry[]
   dispatch: DeliveryDispatchRules
   /** Non-working days on top of the weekly pattern, soonest first. Dates the
@@ -276,6 +289,7 @@ export async function buildDeliveryCatalogue(): Promise<DeliveryCatalogue> {
     scopeOrder: SCOPE_SPECIFICITY,
     pricing: 'per-unit',
     scopes,
+    rangeAttributeId: settings.rangeAttributeId,
     services,
     dispatch: {
       cutoffTime: settings.cutoffTime,

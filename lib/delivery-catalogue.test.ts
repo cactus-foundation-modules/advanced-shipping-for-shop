@@ -147,6 +147,20 @@ describe('buildDeliveryCatalogue', () => {
     expect(catalogue.services.map((service) => service.isDefault)).toEqual([true, false])
   })
 
+  // Published so a consumer labelling products by an attribute of its own can
+  // tell whether its labels and these scope names are the same words. A RANGE
+  // scope's ref is a value of THIS attribute, and nothing else says so.
+  it('publishes the attribute its range scopes point into', async () => {
+    tiers.value = [tier('t1', 'standard', 'Standard')]
+    config.value = [scopeConfig('t1', 'RANGE', 'val-orion', '9.99')]
+    expect((await buildDeliveryCatalogue()).rangeAttributeId).toBe('attr-range')
+  })
+
+  it('publishes no range attribute where the shop has not chosen one', async () => {
+    settings.value = { ...settings.value, rangeAttributeId: null }
+    expect((await buildDeliveryCatalogue()).rangeAttributeId).toBeNull()
+  })
+
   it('keeps a rule that says a service is NOT offered, so the caller can see it', async () => {
     tiers.value = [tier('t1', 'express', 'Express')]
     config.value = [scopeConfig('t1', 'RANGE', 'val-orion', '0.00', { available: false })]
