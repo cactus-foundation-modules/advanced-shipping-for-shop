@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import type { ShpOutOfStockBehaviour } from '@/modules/shop/lib/types'
 import type {
+  AshSettings,
   ResolvedTier,
   ScopeType,
   ServiceTier,
@@ -57,7 +58,7 @@ export type ResolveContext = {
   holidays: Set<string>
 }
 
-type ProductRow = {
+export type ProductRow = {
   id: string
   supplier: string | null
   master_category_id: string | null
@@ -68,7 +69,12 @@ type ProductRow = {
   pre_order_dispatch_date: Date | null
 }
 
-const SPECIFICITY: ScopeType[] = ['RANGE', 'CATEGORY', 'SUPPLIER', 'DEFAULT']
+/** Most specific first. Exported because anything publishing this module's
+ *  scopes has to say what order they are tried in, and saying it twice is how
+ *  the two answers come to disagree. */
+export const SCOPE_SPECIFICITY: readonly ScopeType[] = ['RANGE', 'CATEGORY', 'SUPPLIER', 'DEFAULT']
+
+const SPECIFICITY: readonly ScopeType[] = SCOPE_SPECIFICITY
 
 // True when a scoped row applies to this product at the given tier.
 function matchesScope(scopeType: ScopeType, scopeRef: string | null, ctx: ScopeCtx): boolean {
@@ -148,16 +154,25 @@ function stockOf(row: ProductRow): StockState {
   }
 }
 
-// Resolves each product id to its stock state and the delivery services offered
-// to it. Products offered no service at all are simply absent from the map, so
-// the storefront shows no estimate for them.
-export async function resolveProductDeliveries(
+/** A product's stock row and the scope facts every scoped rule keys on. */
+export type ProductScopeFacts = { row: ProductRow; scope: ScopeCtx }
+
+// The scope facts for a set of products: the range values, category ancestry
+// and supplier each one resolves against, with the variant-child fallbacks
+// already applied.
+//
+// Split out of resolveProductDeliveries so that anything else asking "which
+// scope does this product fall in" - the delivery-services catalogue published
+// for other modules, say - answers it with exactly this code rather than a
+// second copy that can drift. A scope answered one way in the basket and
+// another way in a product feed is the drift worth designing against.
+export async function resolveProductScopeFacts(
   productIds: string[],
-  _ctx: ResolveContext,
-): Promise<Map<string, ProductDelivery>> {
-  const result = new Map<string, ProductDelivery>()
+  settings: AshSettings,
+): Promise<Map<string, ProductScopeFacts>> {
+  const facts = new Map<string, ProductScopeFacts>()
   const ids = [...new Set(productIds)].filter(Boolean)
-  if (ids.length === 0) return result
+  if (ids.length === 0) return facts
 
   // A cart line for a product with options holds the hidden variant CHILD
   // product, and the child carries none of the scope facts services key on - the
@@ -167,18 +182,11 @@ export async function resolveProductDeliveries(
   const parentByChild = await getVariantParents(ids)
   const allIds = [...new Set([...ids, ...parentByChild.values()])]
 
-  const [settings, tiers, tierConfig, productRows] = await Promise.all([
-    getSettingsCached(),
-    listTiersCached(),
-    listTierConfigCached(),
-    prisma.$queryRaw<ProductRow[]>`
-      SELECT "id", "supplier", "master_category_id", "track_inventory", "stock_count",
-             "out_of_stock_behaviour", "is_pre_order", "pre_order_dispatch_date"
-      FROM "shp_products" WHERE "id" IN (${Prisma.join(allIds)})
-    `,
-  ])
-
-  if (tiers.length === 0) return result
+  const productRows = await prisma.$queryRaw<ProductRow[]>`
+    SELECT "id", "supplier", "master_category_id", "track_inventory", "stock_count",
+           "out_of_stock_behaviour", "is_pre_order", "pre_order_dispatch_date"
+    FROM "shp_products" WHERE "id" IN (${Prisma.join(allIds)})
+  `
 
   // Range value ids per product (only when the admin has designated a range
   // attribute), joined through to the chosen attribute's values.
@@ -250,11 +258,40 @@ export async function resolveProductDeliveries(
     const parentRange = parentRow ? rangeByProduct.get(parentRow.id) ?? [] : []
     const ownChain = row.master_category_id ? chainByCategory.get(row.master_category_id) ?? [] : []
     const parentChain = parentRow?.master_category_id ? chainByCategory.get(parentRow.master_category_id) ?? [] : []
-    const ctxScope: ScopeCtx = {
-      rangeValueIds: ownRange.length > 0 ? ownRange : parentRange,
-      categoryChain: ownChain.length > 0 ? ownChain : parentChain,
-      supplier: row.supplier ?? parentRow?.supplier ?? null,
-    }
+    facts.set(row.id, {
+      row,
+      scope: {
+        rangeValueIds: ownRange.length > 0 ? ownRange : parentRange,
+        categoryChain: ownChain.length > 0 ? ownChain : parentChain,
+        supplier: row.supplier ?? parentRow?.supplier ?? null,
+      },
+    })
+  }
+
+  return facts
+}
+
+// Resolves each product id to its stock state and the delivery services offered
+// to it. Products offered no service at all are simply absent from the map, so
+// the storefront shows no estimate for them.
+export async function resolveProductDeliveries(
+  productIds: string[],
+  _ctx: ResolveContext,
+): Promise<Map<string, ProductDelivery>> {
+  const result = new Map<string, ProductDelivery>()
+  const ids = [...new Set(productIds)].filter(Boolean)
+  if (ids.length === 0) return result
+
+  const [settings, tiers, tierConfig] = await Promise.all([
+    getSettingsCached(),
+    listTiersCached(),
+    listTierConfigCached(),
+  ])
+  if (tiers.length === 0) return result
+
+  const facts = await resolveProductScopeFacts(ids, settings)
+
+  for (const { row, scope: ctxScope } of facts.values()) {
     const stock = stockOf(row)
 
     // Each service's most-specific scope row for this product. A service with no
