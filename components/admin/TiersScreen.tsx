@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useAdminConfirm } from '@/components/admin/useAdminConfirm'
 import type { ScopeType, ServiceTier, TierScopeConfig } from '@/modules/advanced-shipping-for-shop/lib/types'
 import { ScopePicker, scopeRefLabel, type ScopeOptions } from '@/modules/advanced-shipping-for-shop/components/admin/scope-picker'
 
@@ -218,6 +219,7 @@ function PriceRow({
     minLeadDays: c.minLeadDays,
   })
   const hasTiming = c.transitDays != null || c.minLeadDays != null
+  const [askConfirm, confirmNode] = useAdminConfirm()
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(asDraft)
@@ -246,6 +248,7 @@ function PriceRow({
     return (
       <tr style={{ borderTop: '1px solid var(--color-border)' }}>
         <td style={{ padding: '0.5rem 0.75rem' }}>
+          {confirmNode}
           {scopeRefLabel(c.scopeType, c.scopeRef, options)}
           {chips.length > 0 && (
             <span style={{ display: 'inline-flex', gap: '0.25rem', flexWrap: 'wrap', marginLeft: '0.5rem', verticalAlign: 'middle' }}>
@@ -261,7 +264,7 @@ function PriceRow({
         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
           <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={startEditing}>Edit</button>
           {' '}
-          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Remove the price for ${scopeRefLabel(c.scopeType, c.scopeRef, options)}?`)) void send(url, 'DELETE') }}>Remove</button>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={async () => { if (await askConfirm({ title: `Remove the price for ${scopeRefLabel(c.scopeType, c.scopeRef, options)}?`, message: 'The service falls back to its default price for that scope.', confirmLabel: 'Remove' })) void send(url, 'DELETE') }}>Remove</button>
         </td>
       </tr>
     )
@@ -325,6 +328,7 @@ function TierCard({
   onMove: (delta: number) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [askConfirm, confirmNode] = useAdminConfirm()
   const [draft, setDraft] = useState({ label: tier.label, description: tier.description ?? '', transitDays: tier.transitDays, minLeadDays: tier.minLeadDays })
   const [priceScope, setPriceScope] = useState<{
     scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean
@@ -340,6 +344,7 @@ function TierCard({
 
   return (
     <section style={card}>
+      {confirmNode}
       {/* Header: everything a shop owner needs to recognise the service at a glance */}
       <div style={{ ...cardPad, display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 16rem', minWidth: 0 }}>
@@ -413,7 +418,7 @@ function TierCard({
             <p style={help}>Working days from dispatch to the door. A price row below can give this service a different delivery time for just that shipping attribute or category.</p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem' }}>
               <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => send(base, 'PATCH', { label: draft.label, description: draft.description.trim() || null, transitDays: draft.transitDays, minLeadDays: draft.minLeadDays })}>Save changes</button>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { if (confirm(`Delete the "${tier.label}" service?`)) void send(base, 'DELETE') }}>Delete service</button>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={async () => { if (await askConfirm({ title: `Delete the "${tier.label}" service?`, message: 'Its prices go with it.' })) void send(base, 'DELETE') }}>Delete service</button>
             </div>
           </fieldset>
 
