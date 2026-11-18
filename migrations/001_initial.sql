@@ -76,7 +76,11 @@ CREATE TABLE IF NOT EXISTS "ash_tier_scope_config" (
     "scope_type" TEXT NOT NULL,
     "scope_ref" TEXT,
     "available" BOOLEAN NOT NULL DEFAULT true,
+    -- `price` is the SALES price charged to the shopper; `cost_price` is what
+    -- the shop pays for the service, snapshotted onto the order line and put on
+    -- purchase orders (see migration 010).
     "price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    "cost_price" NUMERIC(10, 2) NOT NULL DEFAULT 0,
     "transit_days" INTEGER,
     "min_lead_days" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

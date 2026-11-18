@@ -10,7 +10,10 @@ const ConfigBody = z.object({
   scopeType: z.enum(['DEFAULT', 'SUPPLIER', 'CATEGORY', 'RANGE']),
   scopeRef: z.string().min(1).nullable(),
   available: z.boolean(),
+  // Sales price, charged to the shopper.
   price: z.number().min(0).max(1_000_000),
+  // Cost price, what the shop pays for the service; goes on purchase orders.
+  costPrice: z.number().min(0).max(1_000_000),
   // Absolute per-scope timing overrides; null (the default) inherits the
   // service's own timing.
   transitDays: z.number().int().min(0).max(365).nullable().default(null),

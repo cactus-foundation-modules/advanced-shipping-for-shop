@@ -76,7 +76,11 @@ export type TierScopeConfig = {
   scopeType: ScopeType
   scopeRef: string | null
   available: boolean
+  // What the shopper is charged for the service (the SALES price).
   price: string // decimal string, "10.00"
+  // What the shop pays for it (the COST price): snapshotted onto the order line
+  // at checkout and put on purchase orders raised from that order.
+  costPrice: string // decimal string, "10.00"
   transitDays: number | null
   minLeadDays: number | null
 }

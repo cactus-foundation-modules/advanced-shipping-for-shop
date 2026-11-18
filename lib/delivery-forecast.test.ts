@@ -16,7 +16,7 @@ const settings = {
 const ctx = { now: new Date('2026-09-14T09:00:00Z'), timezone: 'Europe/London', holidays: new Set<string>() } as unknown as ResolveContext
 
 const tier = (key: string, price: string, transitDays: number): ResolvedTierOption => ({
-  key, label: key, description: null, price, available: true, modifiers: { transitDays, minLeadDays: null },
+  key, label: key, description: null, price, costPrice: '0.00', available: true, modifiers: { transitDays, minLeadDays: null },
 })
 
 const colour = (label: string, position: number): VariantOptionValue =>

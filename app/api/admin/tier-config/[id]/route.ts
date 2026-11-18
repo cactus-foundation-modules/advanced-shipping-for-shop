@@ -8,7 +8,10 @@ import { deleteTierConfig, getTierConfig, updateTierConfig } from '@/modules/adv
 // the POST upsert, which owns the (tier, scope) uniqueness.
 const ConfigPatch = z.object({
   available: z.boolean(),
+  // Sales price, charged to the shopper.
   price: z.number().min(0).max(1_000_000),
+  // Cost price, what the shop pays for the service; goes on purchase orders.
+  costPrice: z.number().min(0).max(1_000_000),
   transitDays: z.number().int().min(0).max(365).nullable(),
   minLeadDays: z.number().int().min(0).max(365).nullable(),
 }).partial()

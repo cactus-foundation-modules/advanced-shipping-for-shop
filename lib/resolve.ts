@@ -34,7 +34,8 @@ export type ResolvedTierOption = {
   key: string
   label: string
   description: string | null
-  price: string // decimal string, "10.00"
+  price: string // decimal string, "10.00" - the SALES price, charged to the shopper
+  costPrice: string // decimal string - what the shop pays; never shown to a shopper
   available: boolean
   modifiers: ResolvedTier
 }
@@ -310,6 +311,7 @@ export async function resolveProductDeliveries(
         label: tier.label,
         description: tier.description,
         price: winningConfig ? winningConfig.price : '0.00',
+        costPrice: winningConfig ? winningConfig.costPrice : '0.00',
         available: true,
         modifiers: tierModifiers(tier, winningConfig),
       })

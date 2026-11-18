@@ -24,6 +24,7 @@ function mapConfig(r: Record<string, unknown>): TierScopeConfig {
     scopeRef: (r.scope_ref as string | null) ?? null,
     available: r.available as boolean,
     price: (r.price as { toString(): string }).toString(),
+    costPrice: (r.cost_price as { toString(): string }).toString(),
     transitDays: r.transit_days == null ? null : Number(r.transit_days),
     minLeadDays: r.min_lead_days == null ? null : Number(r.min_lead_days),
   }
@@ -168,7 +169,9 @@ export type TierConfigInput = {
   scopeType: ScopeType
   scopeRef: string | null
   available: boolean
+  // Sales price (charged to the shopper) and cost price (what the shop pays).
   price: number
+  costPrice: number
   // Nullable absolute timing overrides; null inherits the service's own.
   transitDays: number | null
   minLeadDays: number | null
@@ -182,14 +185,15 @@ export async function upsertTierConfig(input: TierConfigInput): Promise<void> {
   await prisma.$executeRaw`
     INSERT INTO "ash_tier_scope_config" (
       "id", "tier_id", "scope_type", "scope_ref", "available", "price",
-      "transit_days", "min_lead_days", "created_at", "updated_at"
+      "cost_price", "transit_days", "min_lead_days", "created_at", "updated_at"
     ) VALUES (
       ${id}, ${input.tierId}, ${input.scopeType}, ${scopeRef}, ${input.available}, ${input.price},
-      ${input.transitDays}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      ${input.costPrice}, ${input.transitDays}, ${input.minLeadDays}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("tier_id", "scope_type", COALESCE("scope_ref", '')) DO UPDATE SET
       "available" = ${input.available},
       "price" = ${input.price},
+      "cost_price" = ${input.costPrice},
       "transit_days" = ${input.transitDays},
       "min_lead_days" = ${input.minLeadDays},
       "updated_at" = CURRENT_TIMESTAMP
@@ -208,6 +212,7 @@ export async function updateTierConfig(
   const sets: Prisma.Sql[] = []
   if (patch.available !== undefined) sets.push(Prisma.sql`"available" = ${patch.available}`)
   if (patch.price !== undefined) sets.push(Prisma.sql`"price" = ${patch.price}`)
+  if (patch.costPrice !== undefined) sets.push(Prisma.sql`"cost_price" = ${patch.costPrice}`)
   if (patch.transitDays !== undefined) sets.push(Prisma.sql`"transit_days" = ${patch.transitDays}`)
   if (patch.minLeadDays !== undefined) sets.push(Prisma.sql`"min_lead_days" = ${patch.minLeadDays}`)
   if (sets.length === 0) return

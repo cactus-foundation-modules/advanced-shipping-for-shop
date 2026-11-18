@@ -56,7 +56,7 @@ function tier(id: string, key: string, label: string, extra: Partial<ServiceTier
 }
 
 function scopeConfig(tierId: string, scopeType: TierScopeConfig['scopeType'], scopeRef: string | null, price: string, extra: Partial<TierScopeConfig> = {}): TierScopeConfig {
-  return { id: `${tierId}-${scopeRef ?? 'default'}`, tierId, scopeType, scopeRef, available: true, price, transitDays: null, minLeadDays: null, ...extra }
+  return { id: `${tierId}-${scopeRef ?? 'default'}`, tierId, scopeType, scopeRef, available: true, price, costPrice: '0.00', transitDays: null, minLeadDays: null, ...extra }
 }
 
 function ctx(rangeValueIds: string[], categoryChain: string[], supplier: string | null): ProductScopeFacts {

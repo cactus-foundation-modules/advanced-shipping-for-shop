@@ -12,6 +12,7 @@ import { formatDeliveryDate, formatDeliveryByLabel, todayInZone, workingDaysBetw
 import { computeEstimate, effectiveShipDays } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { DELIVERY_FIELD_LABEL, DELIVERY_META_KEY, paidDeliveryValue, type DeliveryLineState } from '@/modules/advanced-shipping-for-shop/lib/deferred-delivery'
 import { findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { DELIVERY_COST_META_KEY, deliveryCostState } from '@/modules/advanced-shipping-for-shop/lib/delivery-cost'
 import { effectiveTierPrice, tierOptionLabel, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
@@ -186,10 +187,18 @@ export async function resolveShippingTierLineMeta(
   // charge - the money is already in priceAdjust above.
   const charges = priceAdjust > 0 ? [{ label: 'Delivery', amount: priceAdjust }] : null
 
+  // What the service costs the shop, snapshotted beside what the shopper paid so
+  // a purchase order raised from this line pays the supplier the cost price and
+  // not the customer's delivery charge (see lib/delivery-cost.ts).
+  const data: Record<string, unknown> = {
+    [DELIVERY_COST_META_KEY]: deliveryCostState(chosenKey, tierOption.costPrice),
+    ...(state ? { [DELIVERY_META_KEY]: state } : {}),
+  }
+
   return {
     valid: true,
     priceAdjust,
-    persistMeta: { fields, ...(batch ? { batch } : {}), ...(state ? { data: { [DELIVERY_META_KEY]: state } } : {}) },
+    persistMeta: { fields, ...(batch ? { batch } : {}), data },
     control,
     charges,
   }

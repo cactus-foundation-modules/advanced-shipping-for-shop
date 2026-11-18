@@ -31,6 +31,7 @@ const tier = (key: string, price: string, transitDays = 3): ResolvedTierOption =
   label: key,
   description: null,
   price,
+  costPrice: '0.00',
   available: true,
   modifiers: { transitDays, minLeadDays: null },
 })

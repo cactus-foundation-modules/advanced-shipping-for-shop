@@ -201,6 +201,20 @@ export function TiersScreen() {
   )
 }
 
+// What a price row makes: sales less cost, in pounds and as a share of the sales
+// price. A row selling below cost is shown in the danger colour, because a
+// delivery service that loses money on every order is worth noticing.
+function MarginText({ cost, sale }: { cost: number; sale: number }) {
+  const margin = Math.round(((sale || 0) - (cost || 0)) * 100) / 100
+  const percent = sale > 0 ? Math.round((margin / sale) * 100) : null
+  const loss = margin < 0
+  return (
+    <span style={{ color: loss ? 'var(--color-danger)' : 'var(--color-text-secondary)', fontWeight: loss ? 600 : undefined }}>
+      {loss ? '-' : ''}£{Math.abs(margin).toFixed(2)}{percent != null ? ` (${percent}%)` : ''}
+    </span>
+  )
+}
+
 // One price row: reads as a plain line until you hit Edit, then unfolds into the
 // same fields the "add a price" box has, minus where it applies - moving a price
 // somewhere else is a remove and an add, because the scope is the row's identity.
@@ -214,6 +228,7 @@ function PriceRow({
 }) {
   const asDraft = () => ({
     price: Number(c.price),
+    costPrice: Number(c.costPrice),
     available: c.available,
     transitDays: c.transitDays,
     minLeadDays: c.minLeadDays,
@@ -237,6 +252,7 @@ function PriceRow({
   async function save() {
     const ok = await send(url, 'PATCH', {
       price: draft.price,
+      costPrice: draft.costPrice,
       available: draft.available,
       transitDays: customTiming ? draft.transitDays : null,
       minLeadDays: customTiming ? draft.minLeadDays : null,
@@ -256,11 +272,15 @@ function PriceRow({
             </span>
           )}
         </td>
-        <td style={{ padding: '0.5rem 0.75rem' }}>
-          {c.available
-            ? <>£{c.price}</>
-            : <span style={{ color: 'var(--color-text-secondary)' }}>Not available</span>}
-        </td>
+        {c.available ? (
+          <>
+            <td style={{ padding: '0.5rem 0.75rem' }}>£{c.costPrice}</td>
+            <td style={{ padding: '0.5rem 0.75rem' }}>£{c.price}</td>
+            <td style={{ padding: '0.5rem 0.75rem' }}><MarginText cost={Number(c.costPrice)} sale={Number(c.price)} /></td>
+          </>
+        ) : (
+          <td colSpan={3} style={{ padding: '0.5rem 0.75rem', color: 'var(--color-text-secondary)' }}>Not available</td>
+        )}
         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
           <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={startEditing}>Edit</button>
           {' '}
@@ -272,15 +292,19 @@ function PriceRow({
 
   return (
     <tr style={{ borderTop: '1px solid var(--color-border)' }}>
-      <td colSpan={3} style={{ padding: '0.75rem', background: 'var(--color-surface)' }}>
+      <td colSpan={5} style={{ padding: '0.75rem', background: 'var(--color-surface)' }}>
         <p style={{ margin: '0 0 0.625rem', fontSize: '0.8125rem' }}>
           Editing the price for <strong>{scopeRefLabel(c.scopeType, c.scopeRef, options)}</strong>
           <span style={{ color: 'var(--color-text-secondary)' }}> - to move it somewhere else, remove it and add a new one.</span>
         </p>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <label style={field}>Price (£)
+          <label style={field}>Cost price (£)
+            <input className="form-control" style={{ width: '6rem' }} type="number" min={0} step="0.01" value={draft.costPrice} onChange={(e) => setDraft({ ...draft, costPrice: Number(e.target.value) })} />
+          </label>
+          <label style={field}>Sales price (£)
             <input className="form-control" style={{ width: '6rem' }} type="number" min={0} step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} />
           </label>
+          <span style={{ fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>Margin <MarginText cost={draft.costPrice} sale={draft.price} /></span>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>
             <input type="checkbox" checked={draft.available} onChange={(e) => setDraft({ ...draft, available: e.target.checked })} /> Available here
           </label>
@@ -331,9 +355,9 @@ function TierCard({
   const [askConfirm, confirmNode] = useAdminConfirm()
   const [draft, setDraft] = useState({ label: tier.label, description: tier.description ?? '', transitDays: tier.transitDays, minLeadDays: tier.minLeadDays })
   const [priceScope, setPriceScope] = useState<{
-    scopeType: ScopeType; scopeRef: string | null; price: number; available: boolean
+    scopeType: ScopeType; scopeRef: string | null; price: number; costPrice: number; available: boolean
     transitDays: number | null; minLeadDays: number | null
-  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, available: true, transitDays: null, minLeadDays: null })
+  }>({ scopeType: 'DEFAULT', scopeRef: null, price: 0, costPrice: 0, available: true, transitDays: null, minLeadDays: null })
   // Reveals the per-scope timing inputs; closing it clears them back to
   // "inherit the service's timing" so nothing is sent by accident.
   const [customTiming, setCustomTiming] = useState(false)
@@ -428,7 +452,8 @@ function TierCard({
             <p style={{ ...help, marginTop: 0, marginBottom: '0.75rem' }}>
               A service is offered wherever it has a price row, and the most specific one wins: a
               shipping-attribute price beats a category price, which beats a supplier price, which beats the everywhere
-              price. No rows anywhere means the service is never offered.
+              price. No rows anywhere means the service is never offered. The cost price is what you pay for the
+              service and goes on purchase orders; the sales price is what the customer is charged.
             </p>
 
             {config.length === 0 ? (
@@ -439,7 +464,9 @@ function TierCard({
                   <thead>
                     <tr style={{ textAlign: 'left', color: 'var(--color-text-secondary)', background: 'var(--color-surface)' }}>
                       <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Applies to</th>
-                      <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Price</th>
+                      <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Cost price</th>
+                      <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Sales price</th>
+                      <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>Margin</th>
                       <th style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }} aria-label="Actions" />
                     </tr>
                   </thead>
@@ -462,7 +489,10 @@ function TierCard({
                   onChange={(scopeType, scopeRef) => setPriceScope({ ...priceScope, scopeType, scopeRef })}
                 />
               </label>
-              <label style={field}>Price (£)
+              <label style={field}>Cost price (£)
+                <input className="form-control" style={{ width: '6rem' }} type="number" min={0} step="0.01" value={priceScope.costPrice} onChange={(e) => setPriceScope({ ...priceScope, costPrice: Number(e.target.value) })} />
+              </label>
+              <label style={field}>Sales price (£)
                 <input className="form-control" style={{ width: '6rem' }} type="number" min={0} step="0.01" value={priceScope.price} onChange={(e) => setPriceScope({ ...priceScope, price: Number(e.target.value) })} />
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', paddingBottom: '0.5rem' }}>

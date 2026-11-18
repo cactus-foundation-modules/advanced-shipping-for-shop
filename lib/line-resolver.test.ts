@@ -8,6 +8,7 @@ function opt(price: string): ResolvedTierOption {
     label: 'Full installation',
     description: null,
     price,
+    costPrice: '0.00',
     available: true,
     modifiers: { transitDays: 0, minLeadDays: null },
   }

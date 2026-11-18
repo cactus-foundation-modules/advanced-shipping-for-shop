@@ -10,6 +10,7 @@ function config(scopeType: ScopeType, scopeRef: string | null, patch: Partial<Ti
     scopeRef,
     available: true,
     price: '0.00',
+    costPrice: '0.00',
     transitDays: null,
     minLeadDays: null,
     ...patch,
