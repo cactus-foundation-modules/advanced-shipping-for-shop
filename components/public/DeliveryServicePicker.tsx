@@ -184,6 +184,13 @@ export function DeliveryServicePicker({
       // The server has already dropped a stored service the product no longer
       // offers, so its answer is the one to trust.
       if (first?.tierKey) setChosen(first.tierKey)
+      // A pick remembered from earlier in the visit IS the shopper's own pick,
+      // so it counts as touched. Without this, a reload (or a trip away and
+      // back) showed their service selected while the add wrote nothing, and
+      // the line - and any quote saved from the basket - fell back to the
+      // shop's default. Only when the server kept it: a stored service this
+      // variation cannot have is replaced by the default, which nobody chose.
+      if (tierKey && first?.tierKey === tierKey) touched.current = true
     } catch {
       // Best-effort chrome: a failed estimate leaves the block empty rather than
       // putting an error in front of a shopper trying to buy something.
