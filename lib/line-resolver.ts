@@ -11,12 +11,45 @@ import { makeDisplayAdjuster, resolveTaxDisplay } from '@/modules/shop/lib/tax-d
 import { formatDeliveryDate, formatDeliveryByLabel, todayInZone, workingDaysBetween } from '@/modules/advanced-shipping-for-shop/lib/working-days'
 import { computeEstimate, effectiveShipDays } from '@/modules/advanced-shipping-for-shop/lib/estimate'
 import { DELIVERY_FIELD_LABEL, DELIVERY_META_KEY, paidDeliveryValue, type DeliveryLineState } from '@/modules/advanced-shipping-for-shop/lib/deferred-delivery'
-import { findTierOption, type ProductDelivery } from '@/modules/advanced-shipping-for-shop/lib/resolve'
+import { findTierOption, resolveProductDeliveries, type ProductDelivery, type ResolveContext } from '@/modules/advanced-shipping-for-shop/lib/resolve'
 import { DELIVERY_COST_META_KEY, deliveryCostState } from '@/modules/advanced-shipping-for-shop/lib/delivery-cost'
 import { effectiveTierPrice, tierOptionLabel, tierOptionSummary } from '@/modules/advanced-shipping-for-shop/lib/tier-labels'
 import { getProductDelivery, prefetchProductDeliveries } from '@/modules/advanced-shipping-for-shop/lib/delivery-cache'
 import { getResolveContext } from '@/modules/advanced-shipping-for-shop/lib/context'
 import { getSettingsCached } from '@/modules/advanced-shipping-for-shop/lib/db/settings'
+import { getVariantChildIds } from '@/modules/advanced-shipping-for-shop/lib/variations-bridge'
+import { mergeVariantDeliveries } from '@/modules/advanced-shipping-for-shop/lib/merge-variant-deliveries'
+import type { AshSettings, StockState } from '@/modules/advanced-shipping-for-shop/lib/types'
+
+/**
+ * A line's meta key asking for EVERY delivery service the listing's variations
+ * offer between them, rather than the line's own product's.
+ *
+ * A listing with variations is never normally the thing in a basket - the
+ * product page puts the chosen variation there - so its own row resolves to no
+ * services at all. The one line that IS the listing is a one-off made-up item
+ * sold on the back of it (a quoted custom variation), and the honest menu for
+ * that is everything the range can be delivered by. Opt-in, by the module that
+ * put the line there, so an ordinary basket never pays the extra lookup.
+ */
+export const LISTING_WIDE_META_KEY = 'shippingListingWide'
+
+/** The listing-wide menu for a parent product: its enabled variations'
+ *  deliveries merged exactly as the product page merges them before a
+ *  combination is picked (see mergeVariantDeliveries). Undefined where the
+ *  product has no variations or none of them has a service. */
+async function listingWideDelivery(productId: string, ctx: ResolveContext, settings: AshSettings): Promise<ProductDelivery | undefined> {
+  const childIds = (await getVariantChildIds([productId])).get(productId) ?? []
+  if (childIds.length === 0) return undefined
+  const children = [...(await resolveProductDeliveries(childIds, ctx)).values()]
+  return mergeVariantDeliveries(productId, children, ctx, settings) ?? undefined
+}
+
+/** The stock a service is dated against: its own representative variation's on
+ *  a listing-wide menu, else the product's. */
+function stockFor(delivery: ProductDelivery, tierKey: string): StockState {
+  return delivery.stockByTier?.get(tierKey) ?? delivery.stock
+}
 
 const NOOP: CartLineResolution = { valid: true, priceAdjust: 0, persistMeta: null, control: null }
 
@@ -51,12 +84,14 @@ export async function resolveShippingTierLineMeta(
   const ctx = await getResolveContext()
   // Served from the request batch cache when shop prefetched the whole cart (the
   // fast path); falls back to a single resolve otherwise.
-  const delivery = await getProductDelivery(product.id, ctx)
+  const settings = await getSettingsCached()
+  let delivery = await getProductDelivery(product.id, ctx)
+  if ((!delivery || delivery.tiers.length === 0) && meta?.[LISTING_WIDE_META_KEY] === true) {
+    delivery = await listingWideDelivery(product.id, ctx, settings)
+  }
   // No services configured for this product -> this module has nothing to add
   // to the line. Stay out of the fold entirely.
   if (!delivery || delivery.tiers.length === 0) return NOOP
-
-  const settings = await getSettingsCached()
   const chosenKey = chosenTierKey(delivery, meta, settings.defaultTierKey)
   const tierOption = findTierOption(delivery, chosenKey)
   if (!tierOption) return NOOP
@@ -67,7 +102,7 @@ export async function resolveShippingTierLineMeta(
     holidays: ctx.holidays,
     timing: settings,
     tier: tierOption.modifiers,
-    stock: delivery.stock,
+    stock: stockFor(delivery, chosenKey),
   })
 
   const { currencySymbol } = await getShopConfigCached()
@@ -104,7 +139,7 @@ export async function resolveShippingTierLineMeta(
         holidays: ctx.holidays,
         timing: settings,
         tier: t.modifiers,
-        stock: delivery.stock,
+        stock: stockFor(delivery, t.key),
       })
       const byLabel = tEst.available && tEst.targetDate ? formatDeliveryByLabel(tEst.targetDate, todayStr) : null
       const dateLabel = tEst.available && tEst.targetDate ? formatDeliveryDate(tEst.targetDate) : null
