@@ -104,3 +104,18 @@ CREATE TABLE IF NOT EXISTS "ash_holidays" (
     "name" TEXT NOT NULL,
     CONSTRAINT "ash_holidays_pkey" PRIMARY KEY ("region", "date")
 );
+
+-- Closed days the shop adds by hand (a Christmas shutdown, a stocktake, a
+-- supplier's factory holiday), on top of the imported calendar. Kept apart from
+-- ash_holidays because the import replaces that table wholesale, and these are
+-- region-independent: the shop is shut whichever calendar it follows. A row is
+-- one day or an inclusive run of days.
+CREATE TABLE IF NOT EXISTS "ash_custom_closures" (
+    "id" TEXT NOT NULL,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE NOT NULL,
+    "name" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ash_custom_closures_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "ash_custom_closures_range" CHECK ("end_date" >= "start_date")
+);
