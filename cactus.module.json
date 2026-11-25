@@ -1,6 +1,6 @@
 {
   "name": "advanced-shipping-for-shop",
-  "version": "0.1.63",
+  "version": "0.1.64",
   "tablePrefix": "ash_",
   "description": "Advanced delivery dates and per-item delivery services for the Shop: concrete working-day delivery estimates keyed on supplier, category and product range, with a cart-time delivery-and-assembly service picker priced into the order.",
   "requiresCoreVersion": "0.5.1772",
@@ -56,6 +56,12 @@
       "id": "advanced-shipping",
       "import": "./lib/delivery-timing-provider",
       "component": "advancedShippingDeliveryTiming"
+    },
+    {
+      "point": "shop.delivery-calendar",
+      "id": "advanced-shipping",
+      "import": "./lib/delivery-calendar-provider",
+      "component": "advancedShippingDeliveryCalendar"
     },
     {
       "point": "shop.product-delivery-forecast",
