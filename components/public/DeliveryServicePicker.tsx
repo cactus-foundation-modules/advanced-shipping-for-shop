@@ -92,6 +92,28 @@ function storeTier(slug: string, key: string): void {
   }
 }
 
+/**
+ * A link that names a delivery service (`?delivery-service=express-delivery`,
+ * as Live Chat's product cards and the Unified Inbox's emailed product links
+ * write it) is the shopper's pick of it, taken once when the page opens. The
+ * server still decides whether this product can have it, exactly as for a pick
+ * remembered from earlier: one it cannot have falls back to the shop's default
+ * and counts as nobody's choice. Learned on a live site, where an emailed link
+ * opened the desk with every option chosen and the express delivery the
+ * customer had asked for left unpicked.
+ */
+const LINK_PARAM = 'delivery-service'
+const SERVICE_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/
+
+function tierFromLink(): string | null {
+  try {
+    const value = new URLSearchParams(window.location.search).get(LINK_PARAM)?.trim() ?? ''
+    return SERVICE_KEY.test(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
 type EstimateResponse = { items: ItemEstimate[]; controlStyle?: CartControlStyle }
 
 // shop-variations' page-wide announcement of the variation in hand. Read as a
@@ -139,6 +161,8 @@ export function DeliveryServicePicker({
   // adjustments already chosen, not across the range as a whole. Joined into one
   // string so it can be an effect dependency without re-firing on every render.
   const [chosenValueKey, setChosenValueKey] = useState('')
+  // The link's service is taken once, so a later pick on the page wins.
+  const linkTaken = useRef(false)
 
   // Answers can land out of order, and the wrong one winning is not a cosmetic
   // matter - it offers a shopper services their combination cannot have. A page
@@ -215,6 +239,11 @@ export function DeliveryServicePicker({
 
   useEffect(() => {
     if (preview || !slug) return
+    if (!linkTaken.current) {
+      linkTaken.current = true
+      const linked = tierFromLink()
+      if (linked) storeTier(slug, linked)
+    }
     knownKeys.current = new Set(getCart().map(cartLineKey))
     // eslint-disable-next-line react-hooks/set-state-in-effect -- delegating to an async loader; setState runs after the estimate fetch resolves
     void load(readStoredTier(slug), variantId, chosenValueKey)
